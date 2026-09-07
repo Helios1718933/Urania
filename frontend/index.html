@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Urania · 知识点点名册</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- 顶部工具栏：大标题 + 分段控件（macOS HIG segmented control） -->
+    <header class="titlebar">
+      <div class="titlebar-left">
+        <h1 class="app-title">Urania</h1>
+        <p class="app-subtitle">知识点点名册</p>
+      </div>
+
+      <nav class="segmented" role="tablist" aria-label="主导航">
+        <button class="seg-btn is-active" data-view="draw" role="tab" aria-selected="true">抽取新知识</button>
+        <button class="seg-btn" data-view="review" role="tab" aria-selected="false">复习</button>
+        <button class="seg-btn" data-view="stats" role="tab" aria-selected="false">统计</button>
+      </nav>
+
+      <div class="titlebar-right">
+        <span class="count-chip" id="unlearned-chip" title="未学习知识点数量">…</span>
+      </div>
+    </header>
+
+    <main id="main" class="main" aria-live="polite">
+      <p class="loading">载入中…</p>
+    </main>
+  </div>
+  <div id="toast" class="toast" hidden></div>
+  <script src="/js/app.js"></script>
+</body>
+</html>

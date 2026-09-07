@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# 运行时生成的本地数据库（学习记录属于个人数据，不入库）
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# 打包产物
+dist/
+build/
+
+# macOS
+.DS_Store
+._*
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
+
+# 日志与临时文件
+*.log
+nohup.out
