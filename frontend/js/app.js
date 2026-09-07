@@ -13,7 +13,90 @@ const state = {
   config: null,       // /api/config 结果（掌握度标签等）
   drawPoint: null,    // 当前抽到的知识点
   remaining: 0,       // 剩余未学习数
+  phase: "recall",    // draw 视图阶段: "recall"(回忆门) | "revealed"(已揭晓)
 };
+
+/* ---------------- 回忆门（抽取页磨砂遮挡 + 倒计时） ---------------- */
+
+const RECALL_SECONDS = 120;   // 回忆时限（秒），到时自动揭晓
+
+let recallTimerId = null;
+let recallLeft = 0;
+
+function fmtClock(s) {
+  const m = Math.floor(s / 60), ss = s % 60;
+  return `${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+
+function clearRecallTimer() {
+  if (recallTimerId) { clearInterval(recallTimerId); recallTimerId = null; }
+}
+
+function startRecallTimer() {
+  clearRecallTimer();
+  recallLeft = RECALL_SECONDS;
+  const el = document.getElementById("veil-timer");
+  if (!el) return;
+  el.textContent = `⏱ ${fmtClock(recallLeft)}`;
+  recallTimerId = setInterval(() => {
+    recallLeft -= 1;
+    const t = document.getElementById("veil-timer");
+    if (t) {
+      t.textContent = `⏱ ${fmtClock(Math.max(0, recallLeft))}`;
+      t.classList.toggle("warn", recallLeft <= 10);
+    }
+    if (recallLeft <= 0) revealDraw();
+  }, 1000);
+}
+
+// 揭晓：内容模糊平滑退去，展示全部信息与三档自评（不知道→1 / 有点模糊→2 / 知道了→3）
+function revealDraw() {
+  clearRecallTimer();
+  if (state.phase !== "recall" || !state.drawPoint) return;
+  state.phase = "revealed";
+  const p = state.drawPoint;
+  const zone = document.getElementById("recall-zone");
+  if (zone) {
+    zone.classList.remove("is-blurred");       // filter 过渡：模糊 → 清晰
+    zone.style.transition = "filter 0.55s ease";
+  }
+  const floats = document.getElementById("recall-float");
+  if (floats) {
+    floats.classList.add("float-leave");        // 提示浮层淡出
+    setTimeout(() => floats.remove(), 260);
+  }
+  const actions = document.getElementById("draw-actions");
+  if (actions) {
+    actions.innerHTML = `
+      <p class="recall-q">揭晓！诚实自评 —— 这个知识点你现在：</p>
+      <div class="recall-row">
+        <button class="recall-btn lv1" data-mastery="1"><strong>不知道</strong><span>初识 · 听说过</span></button>
+        <button class="recall-btn lv2" data-mastery="2"><strong>有点模糊</strong><span>理解 · 能复述</span></button>
+        <button class="recall-btn lv3" data-mastery="3"><strong>知道了</strong><span>熟悉 · 能解释</span></button>
+      </div>
+      <div class="recall-sub">
+        <button class="btn btn-secondary" id="btn-redraw">换一个</button>
+        <span class="kbd-hint"><kbd>R</kbd> 换一个</span>
+      </div>`;
+    actions.querySelectorAll(".recall-btn").forEach((opt) => {
+      opt.addEventListener("click", async () => {
+        const mastery = Number(opt.dataset.mastery);
+        try {
+          await api(`/api/points/${p.id}/learn`, {
+            method: "POST",
+            body: JSON.stringify({ mastery }),
+          });
+          toast(`已记录：${p.name} → ${masteryLabel(mastery).split(" · ")[0]}`);
+          renderDraw();
+          refreshChip();
+        } catch (e) {
+          toast(e.message);
+        }
+      });
+    });
+    document.getElementById("btn-redraw").addEventListener("click", renderDraw);
+  }
+}
 
 /* ---------------- 工具 ---------------- */
 
@@ -84,6 +167,7 @@ document.querySelectorAll(".seg-btn").forEach((btn) => {
 });
 
 function switchView(view) {
+  clearRecallTimer();   // 离开抽取页时停止回忆倒计时
   state.view = view;
   document.querySelectorAll(".seg-btn").forEach((b) => {
     const active = b.dataset.view === view;
@@ -130,55 +214,40 @@ async function renderDraw() {
   }
 
   const p = data.point;
+  state.phase = "recall";
+  clearRecallTimer();
   $main.innerHTML = `
     <section class="view">
       <p class="view-caption">随机抽取一个未学习的知识点 · 还剩 ${data.remaining} 个未学习</p>
       <article class="card draw-card">
         <div><span class="pill pill-blue">${esc(p.category)}</span></div>
         <h2 class="draw-name">${esc(p.name)}</h2>
-        ${principleBlock(p)}
-        ${vizBlock(p)}
-        ${tagsBlock(p)}
+        <div class="recall-wrap">
+          <div class="recall-zone is-blurred" id="recall-zone">
+            ${principleBlock(p)}
+            ${vizBlock(p)}
+            ${tagsBlock(p)}
+          </div>
+          <div class="recall-float" id="recall-float">
+            <span class="veil-timer" id="veil-timer">⏱ ${fmtClock(RECALL_SECONDS)}</span>
+            <div class="veil-center">
+              <p class="veil-hint">先回忆一下</p>
+              <p class="veil-sub">这个知识点讲的是什么？试着先自己说一遍</p>
+            </div>
+            <button type="button" class="veil-skip" id="btn-skip">跳过 · 立即揭晓</button>
+          </div>
+        </div>
         <div class="divider"></div>
         <div class="draw-actions" id="draw-actions">
-          <button class="btn btn-primary" id="btn-learn">标记为已学习</button>
           <button class="btn btn-secondary" id="btn-redraw">换一个</button>
-          <span class="kbd-hint">快捷键 <kbd>R</kbd> 换一个</span>
-        </div>
-        <div class="mastery-picker" id="mastery-picker" hidden>
-          <p>你现在的掌握程度是？</p>
-          <div class="picker-row">
-            ${[1, 2, 3].map((m) => `
-              <button class="picker-opt" data-mastery="${m}">
-                <strong>${esc(masteryLabel(m).split(" · ")[0])}</strong>
-                <span>${esc(masteryLabel(m).split(" · ")[1] || "")}</span>
-              </button>`).join("")}
-          </div>
+          <span class="kbd-hint">空格 揭晓 · <kbd>R</kbd> 换一个</span>
         </div>
       </article>
     </section>`;
 
-  document.getElementById("btn-learn").addEventListener("click", () => {
-    document.getElementById("mastery-picker").hidden = false;
-    document.getElementById("btn-learn").disabled = true;
-  });
   document.getElementById("btn-redraw").addEventListener("click", renderDraw);
-  document.querySelectorAll("#mastery-picker .picker-opt").forEach((opt) => {
-    opt.addEventListener("click", async () => {
-      const mastery = Number(opt.dataset.mastery);
-      try {
-        await api(`/api/points/${p.id}/learn`, {
-          method: "POST",
-          body: JSON.stringify({ mastery }),
-        });
-        toast(`已标记：${p.name}（${masteryLabel(mastery).split(" · ")[0]}）`);
-        renderDraw();
-        refreshChip();
-      } catch (e) {
-        toast(e.message);
-      }
-    });
-  });
+  document.getElementById("btn-skip").addEventListener("click", revealDraw);
+  startRecallTimer();
 }
 
 /* ================= 复习视图 ================= */
@@ -379,7 +448,7 @@ document.addEventListener("click", (e) => {
   if (goto) switchView(goto);
 });
 
-// 快捷键：抽取视图下按 R 换一个
+// 快捷键：抽取视图下 R 换一个；回忆阶段空格立即揭晓
 document.addEventListener("keydown", (e) => {
   if (state.view !== "draw") return;
   const tag = document.activeElement?.tagName;
@@ -387,6 +456,9 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "r" || e.key === "R") {
     e.preventDefault();
     renderDraw();
+  } else if ((e.key === " " || e.key === "Spacebar") && state.phase === "recall") {
+    e.preventDefault();
+    revealDraw();
   }
 });
 

@@ -418,3 +418,123 @@ kbd {
   .main { padding: 20px 16px 40px; }
   .stats-nums { grid-template-columns: 1fr; }
 }
+
+/* ================ 回忆门（抽取页磨砂遮挡 + 揭晓自评） ================ */
+
+.recall-wrap { position: relative; }
+.recall-zone { position: relative; transition: filter 0.55s ease; }
+
+/* 回忆态：正文自身模糊（iOS「隐藏预览」式）—— 无矩形遮罩，天然零边界 */
+.recall-zone.is-blurred {
+  filter: blur(20px) saturate(1.05) brightness(0.92);
+  user-select: none;
+  pointer-events: none;
+}
+.recall-zone.is-blurred .viz-link,
+.recall-zone.is-blurred .viz-note { pointer-events: none; }
+
+/* 回忆态浮层：仅提示 UI，不铺背景，不产生贴片边界 */
+.recall-float {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  pointer-events: none;
+  animation: float-in 0.35s ease-out;
+}
+@keyframes float-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+.float-leave {
+  opacity: 0;
+  transition: opacity 0.24s ease;
+  animation: none;
+}
+
+.veil-center {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  pointer-events: none;
+}
+/* 提示字无背景，靠「卡片色描影」在模糊正文上保持干净可读 */
+.veil-hint, .veil-sub {
+  text-shadow:
+    0 0 8px var(--card),
+    0 0 14px var(--card),
+    0 1px 2px color-mix(in srgb, var(--label) 18%, transparent);
+}
+
+.veil-timer {
+  position: absolute; top: 12px; right: 14px;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px; font-weight: 600; letter-spacing: 0.3px;
+  color: var(--orange);
+  padding: 3px 6px;   /* 仅保留点按/呼吸空间，无背景 */
+}
+.veil-timer.warn {
+  color: var(--red);
+  animation: timer-pulse 1s ease-in-out infinite;
+}
+@keyframes timer-pulse {
+  50% { transform: scale(1.06); }
+}
+
+.veil-hint { font-size: 16px; font-weight: 700; color: var(--label); }
+.veil-sub  { font-size: 13px; color: var(--label-2); }
+
+.veil-skip {
+  position: absolute; bottom: 12px; right: 14px;
+  appearance: none; border: 0; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 600;
+  color: var(--blue);
+  background: transparent;   /* 无背景纯文字 */
+  padding: 6px 8px;          /* 保留足够点按区域 */
+  border-radius: 6px;
+  transition: opacity 0.15s ease, transform 0.08s ease;
+  pointer-events: auto;
+}
+.veil-skip:hover { opacity: 0.65; }
+.veil-skip:active { transform: scale(0.96); }
+
+/* 揭晓后自评区 */
+.draw-actions { align-items: stretch; }
+.recall-q, .recall-row, .recall-sub { flex: 0 0 100%; }
+.recall-q {
+  font-size: 13px; color: var(--label-2);
+  margin-bottom: 2px;
+}
+.recall-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.recall-btn {
+  flex: 1; min-width: 150px;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font: inherit; font-size: 13px; cursor: pointer;
+  background: var(--fill); color: var(--label);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+.recall-btn:hover { background: var(--fill-2); }
+.recall-btn:active { transform: scale(0.98); }
+.recall-btn strong { display: block; font-size: 14px; margin-bottom: 2px; }
+.recall-btn span   { font-size: 12px; color: var(--label-2); font-weight: 400; }
+/* 语义色：不知道(红) / 有点模糊(中性) / 知道了(绿) */
+.recall-btn.lv1 { background: color-mix(in srgb, var(--red) 9%, transparent); }
+.recall-btn.lv1:hover { background: color-mix(in srgb, var(--red) 16%, transparent); }
+.recall-btn.lv1 strong { color: var(--red); }
+.recall-btn.lv3 { background: color-mix(in srgb, var(--green) 10%, transparent); }
+.recall-btn.lv3:hover { background: color-mix(in srgb, var(--green) 18%, transparent); }
+.recall-btn.lv3 strong { color: var(--green); }
+.recall-sub {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 4px;
+}
+.recall-sub .kbd-hint { margin-left: auto; }
