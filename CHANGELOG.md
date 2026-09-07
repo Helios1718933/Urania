@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- `urania/server.py`：`port=0`（测试随机端口）被 `port or DEFAULT_PORT` 误替换为默认 8765，
+  端口被占用时 API 测试全部失败；改为 `port if port is not None else ...`
+
 ### 计划中
 - 知识点编辑与删除界面
 - 复习会话模式（按「今天该复习」批量过一遍）
@@ -28,5 +32,5 @@
 - 37 个单元测试（抽取均匀性/排除已学习、自评算法、数据仓库、API 端到端含目录穿越防护）
 - GitHub Actions CI（macOS + Ubuntu × Python 3.10–3.13 测试矩阵）
 
-[Unreleased]: https://github.com/helios/urania/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/helios/urania/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Helios1718933/Urania/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Helios1718933/Urania/releases/tag/v0.1.0
