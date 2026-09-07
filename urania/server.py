@@ -11,6 +11,9 @@ from .repository import KnowledgeRepository
 def create_server(repo: KnowledgeRepository,
                   host: str = config.DEFAULT_HOST,
                   port: int | None = None) -> ThreadingHTTPServer:
-    httpd = ThreadingHTTPServer((host, port or config.DEFAULT_PORT), make_handler(repo))
+    httpd = ThreadingHTTPServer(
+        (host, port if port is not None else config.DEFAULT_PORT),
+        make_handler(repo),
+    )
     httpd.daemon_threads = True
     return httpd
