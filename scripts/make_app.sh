@@ -6,6 +6,7 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$PROJECT_DIR/dist/Urania.app"
 CONTENTS="$APP_DIR/Contents"
+VERSION="$(cd "$PROJECT_DIR" && python3 -c 'from urania import APP_VERSION; print(APP_VERSION)')"
 
 rm -rf "$APP_DIR"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources"
@@ -18,8 +19,8 @@ cat > "$CONTENTS/Info.plist" <<PLIST
     <key>CFBundleName</key>            <string>Urania</string>
     <key>CFBundleDisplayName</key>     <string>Urania</string>
     <key>CFBundleIdentifier</key>      <string>com.gaia.urania</string>
-    <key>CFBundleVersion</key>         <string>0.1.0</string>
-    <key>CFBundleShortVersionString</key> <string>0.1.0</string>
+    <key>CFBundleVersion</key>         <string>$VERSION</string>
+    <key>CFBundleShortVersionString</key> <string>$VERSION</string>
     <key>CFBundlePackageType</key>     <string>APPL</string>
     <key>CFBundleExecutable</key>      <string>Urania</string>
     <key>LSMinimumSystemVersion</key>  <string>11.0</string>
@@ -32,7 +33,13 @@ PLIST
 cat > "$CONTENTS/MacOS/Urania" <<LAUNCHER
 #!/bin/bash
 # 由 scripts/make_app.sh 生成，指向项目目录
-cd "$PROJECT_DIR"
+cd "$PROJECT_DIR" || exit 1
+if ! command -v python3 >/dev/null 2>&1; then
+  osascript -e 'display alert "Urania 无法启动" message "未找到 python3。请先安装 Python 3（python.org 或 xcode-select --install）后重试。"' >/dev/null 2>&1 || true
+  exit 1
+fi
+# 双击启动无终端可见，日志落盘便于排查
+exec >> "$PROJECT_DIR/dist/Urania-run.log" 2>&1
 exec python3 main.py "\$@"
 LAUNCHER
 chmod +x "$CONTENTS/MacOS/Urania"

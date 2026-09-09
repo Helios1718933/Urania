@@ -26,8 +26,13 @@ python3 main.py --no-window               # 只起服务，不开窗口（CI/调
 python3 main.py --reset                   # 重置数据库重新播种
 python3 -m unittest discover -s tests -v  # 跑全部测试（改代码后必须全绿）
 ./scripts/reset_db.sh                     # 重置数据库（脚本版）
-./scripts/make_app.sh                     # 重新生成 dist/Urania.app
+./scripts/make_app.sh                     # 生成 dist/Urania.app（双击可运行）
+./scripts/make_dmg.sh                     # 生成 dist/Urania_<版本>.dmg 安装包
 ```
+
+单实例机制：`data/urania.lock` 文件锁（flock）是权威判定，锁内写入运行实例端口；
+网络探测（强制直连不走代理）仅作兜底。macOS 上 SO_REUSEADDR 允许重复绑定端口，
+所以不能依赖「绑定失败」来发现占用。
 
 服务健康检查：`curl http://127.0.0.1:8765/api/health`。
 

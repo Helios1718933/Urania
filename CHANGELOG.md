@@ -12,10 +12,15 @@
   正文模糊平滑退去，无矩形遮罩的零边界视觉
 - 揭晓后三档自评「不知道 / 有点模糊 / 知道了」替代原「标记为已学习→选档」两步，
   一键映射初始掌握度（1 初识 / 2 理解 / 3 熟悉）
+- `scripts/make_dmg.sh`：生成标准 macOS 安装包 `dist/Urania_<版本>.dmg`（拖入 Applications 即装）
+- `.app` 启动器加固：双击运行日志落盘 `dist/Urania-run.log`；缺 python3 时弹窗提示而非静默失败
 
 ### Fixed
 - `urania/server.py`：`port=0`（测试随机端口）被 `port or DEFAULT_PORT` 误替换为默认 8765，
   端口被占用时 API 测试全部失败；改为 `port if port is not None else ...`
+- 单实例机制：反复双击 `.app` 会起多个服务（macOS SO_REUSEADDR 允许重复绑定端口，
+  且健康探测在代理环境下访问 127.0.0.1 失效）。改为 `data/urania.lock` 文件锁（flock）
+  作为权威判定，锁内写入运行实例端口；第二个进程读锁后只打开界面并退出
 
 ### Changed
 - 分段控件（抽取新知识 / 复习 / 统计）升级为液态玻璃材质：胶囊形容器 + 选中态透镜

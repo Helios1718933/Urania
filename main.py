@@ -4,6 +4,9 @@
 默认尝试 pywebview 原生 macOS 窗口（若已安装），
 否则自动用默认浏览器打开；--browser 可强制浏览器模式。
 
+端口策略：若首选端口上已有本应用实例在运行，直接复用该实例并只打开界面
+（避免双击 .app 多次时重复起服务 / 端口冲突崩溃）；否则自动向后尝试绑定。
+
 用法：
     python3 main.py                 # 默认启动
     python3 main.py --browser       # 强制用浏览器打开
@@ -14,11 +17,14 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
+import json
 import logging
+import socket
 import threading
+import urllib.request
 import webbrowser
 
-import urania
 from urania import config, db, seed
 from urania.repository import KnowledgeRepository
 from urania.server import create_server
@@ -26,6 +32,9 @@ from urania.server import create_server
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
                     datefmt="%H:%M:%S")
 logger = logging.getLogger("urania")
+
+PORT_SCAN_RANGE = 20  # 首选端口被占用时，向后尝试的端口数
+LOCK_PATH = config.DATA_DIR / "urania.lock"
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,6 +44,68 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-window", action="store_true", help="只启动服务，不打开任何界面")
     parser.add_argument("--reset", action="store_true", help="重置数据库（删除后重新播种）")
     return parser.parse_args()
+
+
+def probe_running_instance(port: int) -> bool:
+    """探测端口上是否已是本应用（兜底手段；强制直连不走环境代理）。"""
+    url = f"http://{config.DEFAULT_HOST}:{port}/api/health"
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(url, timeout=1.5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("app") == config.APP_NAME
+    except Exception:  # noqa: BLE001 任何网络异常都视为「不是本应用」
+        return False
+
+
+def acquire_instance_lock():
+    """获取单实例文件锁。
+
+    Returns:
+        (lock_handle, port)：拿到锁 → 本进程作为服务端，handle 需保持打开到进程退出，
+        起服务后调用 write_port_to_lock() 写入实际端口；
+        拿不到锁 → (None, 运行中实例写入的端口或 None)，本进程只打开界面。
+    """
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    fh = open(LOCK_PATH, "a+")
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        fh.seek(0)
+        content = fh.read().strip()
+        fh.close()
+        port = int(content) if content.isdigit() else None
+        return None, port
+    fh.seek(0)
+    fh.truncate()  # 清掉历史残留端口
+    return fh, None
+
+
+def write_port_to_lock(lock_fh, port: int) -> None:
+    lock_fh.seek(0)
+    lock_fh.truncate()
+    lock_fh.write(str(port))
+    lock_fh.flush()
+
+
+def pick_free_port(preferred: int) -> int:
+    """选一个可用端口：跳过已被本应用占用（探测）或外服务占用（绑定失败）的端口。
+
+    注意 macOS 上 SO_REUSEADDR 允许重复绑定，绑定不会报错，因此必须先探测。
+    """
+    for port in range(preferred, preferred + PORT_SCAN_RANGE):
+        if probe_running_instance(port):
+            logger.info("端口 %d 上已有本应用实例，跳过", port)
+            continue
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                s.bind((config.DEFAULT_HOST, port))
+            except OSError:
+                logger.info("端口 %d 被其他程序占用，尝试下一个", port)
+                continue
+        return port
+    raise SystemExit(f"端口 {preferred}~{preferred + PORT_SCAN_RANGE - 1} 均被占用，无法启动")
 
 
 def open_native_window(url: str) -> bool:
@@ -55,6 +126,26 @@ def open_native_window(url: str) -> bool:
 def main() -> int:
     args = parse_args()
 
+    # ---- 单实例判定：文件锁是权威，网络探测只是兜底 ----
+    lock_fh, running_port = acquire_instance_lock()
+    if lock_fh is None:
+        # 已有实例在跑：找到它的端口，只打开界面后退出
+        port = running_port
+        if port is None:
+            for candidate in range(args.port, args.port + PORT_SCAN_RANGE):
+                if probe_running_instance(candidate):
+                    port = candidate
+                    break
+        if port is None:
+            raise SystemExit("已有 Urania 实例在运行，但未能定位其端口；请稍后重试。")
+        logger.info("检测到 Urania 已在运行: http://%s:%d —— 直接打开界面",
+                    config.DEFAULT_HOST, port)
+        if not args.no_window:
+            if args.browser or not open_native_window(f"http://{config.DEFAULT_HOST}:{port}"):
+                webbrowser.open(f"http://{config.DEFAULT_HOST}:{port}")
+        return 0
+
+    # ---- 本进程作为服务端 ----
     if args.reset and config.DB_PATH.exists():
         config.DB_PATH.unlink()
         logger.info("已删除旧数据库: %s", config.DB_PATH)
@@ -63,10 +154,12 @@ def main() -> int:
     repo = KnowledgeRepository(conn)
     seed.seed_if_needed(repo)
 
-    server = create_server(repo, port=args.port)
+    port = pick_free_port(args.port)
+    server = create_server(repo, port=port)
+    write_port_to_lock(lock_fh, port)
     thread = threading.Thread(target=server.serve_forever, daemon=True, name="urania-http")
     thread.start()
-    url = f"http://{config.DEFAULT_HOST}:{server.server_address[1]}"
+    url = f"http://{config.DEFAULT_HOST}:{port}"
     logger.info("%s v%s 已启动: %s", config.APP_NAME, config.APP_VERSION, url)
 
     try:
@@ -84,6 +177,7 @@ def main() -> int:
         logger.info("收到退出信号")
     finally:
         server.shutdown()
+        lock_fh.close()
         conn.close()
     return 0
 

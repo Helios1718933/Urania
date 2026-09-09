@@ -34,11 +34,16 @@ python3 main.py --reset       # 重置数据库并重新播种
 
 要求：macOS + Python 3.10+（系统自带或 [python.org](https://www.python.org/downloads/) 安装）。
 
-想要**可双击运行的 App**：
+想要**可双击运行的 App / 安装包**：
 
 ```bash
 ./scripts/make_app.sh         # 生成 dist/Urania.app，可拖入「应用程序」或 Dock
+./scripts/make_dmg.sh         # 生成 dist/Urania_<版本>.dmg 安装包（拖入 Applications 即装）
 ```
+
+> 说明：安装包不是自包含的——Python 源码与数据库仍在项目文件夹内，
+> `.app` 记录了项目的绝对路径；项目移动位置后重新执行上述脚本即可。
+> 重复启动会被自动识别：已有实例运行时，再次双击只会打开界面，不会起第二个服务。
 
 想要**真正的原生窗口**（可选）：
 
@@ -71,6 +76,7 @@ Urania/
 │   └── urania.db            #   运行时自动生成的 SQLite 数据库（不入库 git）
 ├── scripts/
 │   ├── make_app.sh          #   生成可双击的 Urania.app
+│   ├── make_dmg.sh          #   生成 Urania_<版本>.dmg 安装包
 │   └── reset_db.sh          #   重置数据库
 ├── tests/                   # 37 个单元测试（unittest，覆盖核心功能与 API）
 ├── docs/
