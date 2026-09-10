@@ -32,7 +32,6 @@ from urania.server import create_server
 
 logger = logging.getLogger("urania")
 
-TOKEN_FILE = config.DATA_DIR / ".token"
 
 PORT_SCAN_RANGE = 20  # 首选端口被占用时，向后尝试的端口数
 LOCK_PATH = config.DATA_DIR / "urania.lock"
@@ -173,13 +172,18 @@ def main() -> int:
             config.DB_PATH.unlink()
             logger.info("已删除旧数据库: %s", config.DB_PATH)
 
+    # 旧版数据搬迁（幂等）：项目 data/ → ~/Library/Application Support/Urania
+    moved = db.migrate_legacy_data()
+    if moved:
+        logger.info("已迁移旧数据到 %s：%s", config.DATA_DIR, "、".join(moved))
+
     conn = db.init(config.DB_PATH)
     repo = KnowledgeRepository(conn)
     seed.seed_if_needed(repo)
 
     # 局域网模式：监听所有网卡并强制要求访问口令
     host = "0.0.0.0" if args.lan else config.DEFAULT_HOST
-    auth_token = auth.load_or_create_token(TOKEN_FILE) if args.lan else None
+    auth_token = auth.load_or_create_token(config.TOKEN_FILE) if args.lan else None
 
     port = pick_free_port(args.port, host=host)
     server = create_server(repo, host=host, port=port, auth_token=auth_token)

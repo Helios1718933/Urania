@@ -22,14 +22,24 @@ macOS 上的知识点随机抽取学习应用（Urania）：从内置 SQLite 中
 ```bash
 cd ~/Desktop/Gaia/Urania
 ./run.sh                                  # 启动（默认端口 8765，自动开窗口）
+python3 main.py --lan                     # 局域网模式：手机可访问，需口令
 python3 main.py --no-window               # 只起服务，不开窗口（CI/调试）
 python3 main.py --reset                   # 重置数据库重新播种（会先自动备份）
 python3 -m unittest discover -s tests -v  # 跑全部测试（改代码后必须全绿）
 ./scripts/reset_db.sh                     # 重置数据库（脚本版，同样先备份）
-./scripts/backup_db.sh                    # 手动备份数据库到 data/backups/
-./scripts/make_app.sh                     # 生成 dist/Urania.app（双击可运行）
+./scripts/backup_db.sh                    # 手动备份数据库
+./scripts/make_icons.py                   # 生成 PWA 图标与 .icns
+./scripts/make_app.sh                     # 生成自包含 dist/Urania.app（内嵌 Python）
 ./scripts/make_dmg.sh                     # 生成 dist/Urania_<版本>.dmg 安装包
 ```
+
+**路径约定（打包相关改动务必遵守）**
+- 只读资源（`frontend/`、种子数据）走 `config.RESOURCE_ROOT`：源码运行时是项目根目录，
+  打包后是 bundle 的 `Contents/Resources`（py2app 设置 `RESOURCEPATH`）。
+- 可写数据（数据库/备份/令牌/锁）走 `config.DATA_DIR` =
+  `~/Library/Application Support/Urania`。**不要把任何可写文件放回项目目录**，
+  否则装进 /Applications 后写不进去。
+- 旧版放在项目 `data/` 下的数据由 `db.migrate_legacy_data()` 在启动时自动搬迁（幂等）。
 
 单实例机制：`data/urania.lock` 文件锁（flock）是权威判定，锁内写入运行实例端口；
 网络探测（强制直连不走代理）仅作兜底。macOS 上 SO_REUSEADDR 允许重复绑定端口，

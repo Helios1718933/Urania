@@ -7,6 +7,19 @@
 ## [Unreleased]
 
 ### Added
+- **自包含安装包**：`./scripts/make_app.sh` 用 py2app 生成内嵌 Python 运行时的
+  `dist/Urania.app`（55MB，通用二进制），目标 Mac 无需预装 Python；`make_dmg.sh`
+  生成 29MB 的 DMG。含 ad-hoc 签名与图标（`scripts/make_icons.py` 纯标准库生成
+  PNG 与 .icns）
+- **数据目录迁移**：用户数据从项目内 `data/` 迁到
+  `~/Library/Application Support/Urania/`（macOS 规范位置，装进 /Applications 后仍可写）；
+  旧数据首次启动自动搬迁（`db.migrate_legacy_data()`，幂等、不覆盖新数据）
+- **手机端（鸿蒙浏览器）**：`--lan` 局域网模式 + 8 位访问口令（HttpOnly Cookie /
+  Bearer 双通道）；PWA manifest + 图标，「添加到桌面」有独立图标
+- **无障碍适配**：`prefers-reduced-transparency`（玻璃层降级为不透明）、
+  `prefers-contrast: more`、`prefers-reduced-motion`；触控目标补齐到 44×44；
+  刘海屏安全区
+- 内联 SVG 图标（`frontend/js/icons.js`）替换 emoji（规范列为反模式）
 - **`review_logs` 复习日志表**（只追加，对标 Anki 的 revlog）：`learning_records` 存「当前状态」、
   `review_logs` 存「历史事件」，两者分离后才能统计遗忘曲线与真实保留率。
   「标记学习」与「复习自评」都会追加一条日志（含评档、前后掌握度、间隔天数）

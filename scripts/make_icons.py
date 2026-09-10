@@ -116,18 +116,57 @@ def _encode_png(width: int, height: int, rows: list[bytes]) -> bytes:
             + _chunk(b"IEND", b""))
 
 
+# macOS 图标集（.icns 由 iconutil 打包，名字格式固定）
+ICONSET_FILES = {
+    "icon_16x16.png": 16,
+    "icon_16x16@2x.png": 32,
+    "icon_32x32.png": 32,
+    "icon_32x32@2x.png": 64,
+    "icon_128x128.png": 128,
+    "icon_128x128@2x.png": 256,
+    "icon_256x256.png": 256,
+    "icon_256x256@2x.png": 512,
+    "icon_512x512.png": 512,
+    "icon_512x512@2x.png": 1024,
+}
+
+
+def write_icons(path: Path, sizes: dict[str, int]) -> None:
+    """按「文件名 → 尺寸」批量生成 PNG（同尺寸只算一次）。"""
+    cache: dict[int, bytes] = {}
+    for name, size in sizes.items():
+        if size not in cache:
+            cache[size] = _png_bytes(size)
+        target = path / name
+        target.write_bytes(cache[size])
+        print(f"   {name}  ({size}×{size})")
+
+
 def main() -> int:
+    import subprocess
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    targets = {
+    print("PWA 图标：")
+    write_icons(OUT_DIR, {
         "icon-192.png": 192,
         "icon-512.png": 512,
         "apple-touch-icon.png": 180,
-    }
-    for name, size in targets.items():
-        data = _png_bytes(size)
-        path = OUT_DIR / name
-        path.write_bytes(data)
-        print(f"✅ {path.relative_to(OUT_DIR.parent.parent)}  ({size}×{size}, {len(data) / 1024:.1f} KB)")
+    })
+
+    iconset = OUT_DIR.parent.parent / "build" / "Urania.iconset"
+    iconset.mkdir(parents=True, exist_ok=True)
+    print("macOS 图标集：")
+    write_icons(iconset, ICONSET_FILES)
+
+    icns = OUT_DIR / "Urania.icns"
+    result = subprocess.run(
+        ["iconutil", "-c", "icns", str(iconset), "-o", str(icns)],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"⚠️  iconutil 失败（非 macOS 可忽略）: {result.stderr.strip()}")
+        return 0
+    print(f"✅ {icns.relative_to(OUT_DIR.parent.parent)}  ({icns.stat().st_size / 1024:.1f} KB)")
     return 0
 
 

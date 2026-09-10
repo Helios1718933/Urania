@@ -39,12 +39,26 @@ python3 main.py --reset       # 重置数据库并重新播种
 想要**可双击运行的 App / 安装包**：
 
 ```bash
-./scripts/make_app.sh         # 生成 dist/Urania.app，可拖入「应用程序」或 Dock
+./scripts/make_app.sh         # 生成自包含的 dist/Urania.app（内嵌 Python）
 ./scripts/make_dmg.sh         # 生成 dist/Urania_<版本>.dmg 安装包（拖入 Applications 即装）
 ```
 
-> 说明：安装包不是自包含的——Python 源码与数据库仍在项目文件夹内，
-> `.app` 记录了项目的绝对路径；项目移动位置后重新执行上述脚本即可。
+**自包含**：`.app` 内嵌 Python 运行时，目标 Mac **无需预装 Python**；把 `Urania.app`
+拖进「应用程序」即可。首次打开若被 Gatekeeper 拦截（ad-hoc 签名），右键 → 打开。
+对他人分发需要 Developer ID 签名 + 公证，本地自用不必。
+
+**数据位置**：用户数据（数据库、复习历史、备份）放在
+`~/Library/Application Support/Urania/`，不在应用包内——这样装进 `/Applications`
+后仍可写。旧版放在项目 `data/` 下的数据会在首次启动时自动搬过去。
+
+**局域网 / 手机访问**：
+
+```bash
+python3 main.py --lan         # 监听 0.0.0.0，打印手机访问地址与访问口令
+```
+手机浏览器打开终端显示的地址 → 输入口令 → 可「添加到桌面」当作图标用。
+默认（不加 `--lan`）仍只监听 127.0.0.1，无需口令。
+
 > 重复启动会被自动识别：已有实例运行时，再次双击只会打开界面，不会起第二个服务。
 
 想要**真正的原生窗口**（可选）：
