@@ -31,7 +31,7 @@ from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
-from . import config, migrations, sampler
+from . import auth, config, migrations, sampler
 from .logging_setup import request_event
 from .repository import KnowledgeRepository, RepositoryError, ValidationError
 from .review import RATINGS, RATING_LABELS
@@ -50,7 +50,14 @@ _STATIC_TYPES = {
 }
 
 
-def make_handler(repo: KnowledgeRepository):
+def make_handler(repo: KnowledgeRepository, auth_token: str | None = None):
+    """构建请求处理器。
+
+    Args:
+        repo: 数据仓库。
+        auth_token: 非 None 时启用访问令牌认证（局域网模式）。
+            ``/api/health`` 始终免认证——单实例探测依赖它（它只暴露应用名与版本）。
+    """
     class UraniaRequestHandler(BaseHTTPRequestHandler):
         server_version = f"Urania/{config.APP_VERSION}"
         protocol_version = "HTTP/1.1"
@@ -120,6 +127,63 @@ def make_handler(repo: KnowledgeRepository):
             except (json.JSONDecodeError, UnicodeDecodeError) as exc:
                 raise ValidationError("请求体不是合法的 JSON") from exc
 
+        # ------------------------------------------------------------ 认证 --
+        def _check_auth(self) -> bool:
+            """认证通过返回 True；已响应（登录页/跳转/401）返回 False。"""
+            if auth_token is None:
+                return True
+
+            parsed = urlparse(self.path)
+            if parsed.path == "/api/health":     # 单实例探测依赖，保持开放
+                return True
+
+            # 1) 地址栏带 ?token=xxx：校验通过后写 Cookie 并跳转（令牌从 URL 消失）
+            query_token = auth.token_from_query(parsed.query)
+            if query_token is not None:
+                if auth.constant_time_equals(query_token, auth_token):
+                    self._redirect_with_cookie(parsed)
+                    return False
+                auth.slow_down_failure()
+                self._send_login_page("口令不正确，请重新输入")
+                return False
+
+            # 2) Cookie 或 Authorization 头
+            candidate = (
+                auth.token_from_cookie(self.headers.get("Cookie"))
+                or auth.token_from_header(self.headers.get("Authorization"))
+            )
+            if auth.constant_time_equals(candidate, auth_token):
+                return True
+
+            # 3) 未通过
+            auth.slow_down_failure()
+            if parsed.path.startswith("/api/") or parsed.path.startswith(("/css/", "/js/")):
+                self._error(401, "未通过认证：请先在浏览器打开根路径输入访问口令")
+            else:
+                self._send_login_page("")
+            return False
+
+        def _redirect_with_cookie(self, parsed) -> None:
+            """写入令牌 Cookie 并 302 到不带 token 参数的地址。"""
+            target = parsed.path or "/"
+            remaining = [p for p in parsed.query.split("&") if p and not p.startswith("token=")]
+            if remaining:
+                target = f"{target}?{'&'.join(remaining)}"
+            self.send_response(302)
+            self.send_header("Location", target)
+            self.send_header(
+                "Set-Cookie",
+                f"{auth.COOKIE_NAME}={auth_token}; Path=/; Max-Age={auth.COOKIE_MAX_AGE};"
+                " HttpOnly; SameSite=Lax",
+            )
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            self._log_request(302, 0)
+
+        def _send_login_page(self, error: str) -> None:
+            body = auth.LOGIN_PAGE.replace("{error}", error).encode("utf-8")
+            self._send(body, "text/html; charset=utf-8", 401)
+
         def _static(self, rel: str) -> None:
             """安全地返回 frontend/ 下的静态文件。"""
             base = config.FRONTEND_DIR.resolve()
@@ -134,10 +198,14 @@ def make_handler(repo: KnowledgeRepository):
 
         # ------------------------------------------------------------ 路由 --
         def do_GET(self):  # noqa: N802
+            if not self._check_auth():
+                return
             path = urlparse(self.path).path
             try:
                 if path in ("/", "/index.html"):
                     self._static("index.html")
+                elif path in ("/manifest.webmanifest", "/favicon.ico"):
+                    self._static(path.lstrip("/"))
                 elif path.startswith(("/css/", "/js/", "/assets/")):
                     self._static(path.lstrip("/"))
                 elif path == "/api/health":
@@ -190,6 +258,8 @@ def make_handler(repo: KnowledgeRepository):
                 self._internal_error(e)
 
         def do_POST(self):  # noqa: N802
+            if not self._check_auth():
+                return
             path = urlparse(self.path).path
             try:
                 m = re.fullmatch(r"/api/points/(\d+)/learn", path)
@@ -235,6 +305,8 @@ def make_handler(repo: KnowledgeRepository):
                 self._internal_error(e)
 
         def do_DELETE(self):  # noqa: N802
+            if not self._check_auth():
+                return
             path = urlparse(self.path).path
             try:
                 m = re.fullmatch(r"/api/points/(\d+)/record", path)

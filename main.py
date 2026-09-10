@@ -25,12 +25,14 @@ import threading
 import urllib.request
 import webbrowser
 
-from urania import config, db, seed
+from urania import auth, config, db, seed
 from urania.logging_setup import setup_logging
 from urania.repository import KnowledgeRepository
 from urania.server import create_server
 
 logger = logging.getLogger("urania")
+
+TOKEN_FILE = config.DATA_DIR / ".token"
 
 PORT_SCAN_RANGE = 20  # 首选端口被占用时，向后尝试的端口数
 LOCK_PATH = config.DATA_DIR / "urania.lock"
@@ -42,7 +44,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--browser", action="store_true", help="强制用浏览器打开界面")
     parser.add_argument("--no-window", action="store_true", help="只启动服务，不打开任何界面")
     parser.add_argument("--reset", action="store_true", help="重置数据库（删除后重新播种）")
+    parser.add_argument(
+        "--lan", action="store_true",
+        help="局域网模式：监听 0.0.0.0 并启用访问口令（手机浏览器可访问）",
+    )
     return parser.parse_args()
+
+
+def local_ip() -> str:
+    """取本机在局域网中的地址（UDP connect 不会真正发包）。"""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(("8.8.8.8", 80))
+        return str(sock.getsockname()[0])
+    except OSError:
+        return config.DEFAULT_HOST
+    finally:
+        sock.close()
 
 
 def probe_running_instance(port: int) -> bool:
@@ -87,7 +105,7 @@ def write_port_to_lock(lock_fh, port: int) -> None:
     lock_fh.flush()
 
 
-def pick_free_port(preferred: int) -> int:
+def pick_free_port(preferred: int, host: str = config.DEFAULT_HOST) -> int:
     """选一个可用端口：跳过已被本应用占用（探测）或外服务占用（绑定失败）的端口。
 
     注意 macOS 上 SO_REUSEADDR 允许重复绑定，绑定不会报错，因此必须先探测。
@@ -99,7 +117,7 @@ def pick_free_port(preferred: int) -> int:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
-                s.bind((config.DEFAULT_HOST, port))
+                s.bind((host, port))
             except OSError:
                 logger.info("端口 %d 被其他程序占用，尝试下一个", port)
                 continue
@@ -158,24 +176,36 @@ def main() -> int:
     repo = KnowledgeRepository(conn)
     seed.seed_if_needed(repo)
 
-    port = pick_free_port(args.port)
-    server = create_server(repo, port=port)
+    # 局域网模式：监听所有网卡并强制要求访问口令
+    host = "0.0.0.0" if args.lan else config.DEFAULT_HOST
+    auth_token = auth.load_or_create_token(TOKEN_FILE) if args.lan else None
+
+    port = pick_free_port(args.port, host=host)
+    server = create_server(repo, host=host, port=port, auth_token=auth_token)
     write_port_to_lock(lock_fh, port)
     thread = threading.Thread(target=server.serve_forever, daemon=True, name="urania-http")
     thread.start()
-    url = f"http://{config.DEFAULT_HOST}:{port}"
-    logger.info("%s v%s 已启动: %s", config.APP_NAME, config.APP_VERSION, url)
+
+    local_url = f"http://{config.DEFAULT_HOST}:{port}"
+    logger.info("%s v%s 已启动", config.APP_NAME, config.APP_VERSION)
+    logger.info("  本机访问: %s", local_url)
+    if args.lan:
+        logger.info("  手机访问: http://%s:%d", local_ip(), port)
+        logger.info("  访问口令: %s   （首次打开会要求输入，之后自动记住）", auth_token)
+        logger.info("  提示: 首次在手机上打开后可用「添加到桌面」生成图标")
+    else:
+        logger.info("  提示: 需要手机访问请用 --lan 启动")
 
     try:
         if args.no_window:
             thread.join()
         elif args.browser:
-            webbrowser.open(url)
+            webbrowser.open(local_url)
             thread.join()
-        elif not open_native_window(url):
+        elif not open_native_window(local_url):
             logger.info("未安装 pywebview（可选依赖），已用浏览器打开。"
                         "如需原生窗口: pip install 'pywebview[qt]' 或 pip install pywebview pyobjc")
-            webbrowser.open(url)
+            webbrowser.open(local_url)
             thread.join()
     except KeyboardInterrupt:
         logger.info("收到退出信号")

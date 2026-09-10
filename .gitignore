@@ -12,6 +12,7 @@ data/*.db-journal
 data/*.db-wal
 data/*.db-shm
 data/*.lock
+data/.token
 data/backups/
 
 # 打包产物

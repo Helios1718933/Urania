@@ -112,6 +112,11 @@ async function api(path, options = {}) {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
+  if (res.status === 401) {
+    // 局域网模式下令牌失效（换设备 / 清过 Cookie）→ 回根路径显示口令页
+    window.location.href = "/";
+    throw new Error("需要重新输入访问口令");
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `请求失败 (${res.status})`);
   return data;

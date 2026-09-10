@@ -581,3 +581,105 @@ kbd {
   margin-top: 4px;
 }
 .recall-sub .kbd-hint { margin-left: auto; }
+
+/* ============================================================
+   触屏与无障碍适配
+   依据：Apple HIG（materials / accessibility / layout）
+   ============================================================ */
+
+/* ---------- 1. 触控目标不小于 44×44（HIG & WCAG 2.5.8）----------
+   触屏或窄屏时放大可点击区域。桌面鼠标场景保持原尺寸不受影响。 */
+@media (max-width: 720px), (pointer: coarse) {
+  .seg-btn { min-height: 44px; padding: 10px 18px; font-size: 14px; }
+  .btn { min-height: 44px; padding: 12px 18px; }
+  .btn-text-danger { min-height: 44px; padding: 10px 8px; }
+  .back-btn { min-height: 44px; padding: 8px 8px; }
+  .veil-skip { min-height: 44px; padding: 10px 16px; }
+  .viz-link { min-height: 44px; align-items: center; }
+  .picker-opt, .recall-btn { min-height: 60px; }
+  .list-row { min-height: 56px; }
+  .seg-btn:focus-visible, .btn:focus-visible { outline-width: 4px; }
+
+  /* 键盘快捷键在手机上不存在，隐藏提示省出空间 */
+  .kbd-hint { display: none; }
+
+  /* 刘海屏 / 手势条安全区 */
+  .titlebar {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+  .main {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(40px, env(safe-area-inset-bottom));
+  }
+  .toast { bottom: max(28px, calc(env(safe-area-inset-bottom) + 16px)); }
+
+  /* 回忆门输入区在小屏上更紧凑 */
+  .recall-row { gap: 8px; }
+  .veil-center { padding: 12px 18px; }
+}
+
+/* ---------- 2. 减弱透明度：玻璃层降级为不透明填充 ----------
+   HIG 明确「材料外观会随减弱透明度 / 增强对比度设置变化」，必须响应。 */
+@media (prefers-reduced-transparency: reduce) {
+  .titlebar {
+    background: var(--bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .segmented {
+    background: var(--fill-2);
+    box-shadow: inset 0 0 0 1px var(--separator);
+  }
+  .seg-btn.is-active {
+    background: var(--card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14), inset 0 0 0 1px var(--separator);
+  }
+  .veil-center, .veil-timer, .veil-skip {
+    background: var(--card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+    border: 1px solid var(--separator);
+  }
+  .veil-skip:hover { background: var(--fill); }
+}
+
+/* ---------- 3. 增强对比度：加深描边与次要文字 ---------- */
+@media (prefers-contrast: more) {
+  :root {
+    --label-2: rgba(60, 60, 67, 0.85);
+    --label-3: rgba(60, 60, 67, 0.60);
+    --separator: rgba(60, 60, 67, 0.45);
+    --fill: rgba(120, 120, 128, 0.18);
+    --fill-2: rgba(120, 120, 128, 0.24);
+  }
+  .seg-btn.is-active { box-shadow: inset 0 0 0 1.5px var(--label-3), var(--lens-outer); }
+  .btn-secondary, .picker-opt, .recall-btn { border: 1px solid var(--separator); }
+  .tag, .pill { border: 1px solid var(--separator); }
+}
+
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root {
+    --label-2: rgba(235, 235, 245, 0.85);
+    --label-3: rgba(235, 235, 245, 0.60);
+    --separator: rgba(140, 140, 150, 0.75);
+    --fill: rgba(120, 120, 128, 0.32);
+    --fill-2: rgba(120, 120, 128, 0.40);
+  }
+}
+
+/* ---------- 4. 减少动态效果（WCAG 2.3.3） ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .view, .toast, .recall-float { animation: none; }
+  .veil-timer.warn { animation: none; }
+  .btn:active { transform: none; }
+}
