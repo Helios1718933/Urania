@@ -683,3 +683,27 @@ kbd {
   .veil-timer.warn { animation: none; }
   .btn:active { transform: none; }
 }
+
+/* ============================================================
+   图标（内联 SVG，替代 emoji）
+   统一由 currentColor 着色，随文字颜色与深浅色模式自适应
+   ============================================================ */
+
+.empty-icon svg {
+  width: 30px; height: 30px;
+  color: var(--label-2);
+}
+
+.viz-link svg {
+  width: 14px; height: 14px;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.veil-timer {
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.veil-timer svg {
+  width: 14px; height: 14px;
+  flex-shrink: 0;
+}

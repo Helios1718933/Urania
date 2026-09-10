@@ -13,14 +13,14 @@ export async function renderReviewList() {
   try {
     data = await api("/api/review/queue");
   } catch (e) {
-    $main.innerHTML = emptyBox("⚠️", "加载失败", e.message);
+    $main.innerHTML = emptyBox("alert", "加载失败", e.message);
     return;
   }
 
   if (!data.items.length) {
     $main.innerHTML = `
       <section class="view">
-        ${emptyBox("🗂", "还没有已学习的知识点", "先去抽取一个新知识点，标记学习后就会出现在这里。",
+        ${emptyBox("tray", "还没有已学习的知识点", "先去抽取一个新知识点，标记学习后就会出现在这里。",
           `<button class="btn btn-primary" data-goto="draw">去抽取新知识</button>`)}
       </section>`;
     return;
@@ -61,7 +61,7 @@ export async function renderReviewDetail(pointId) {
   try {
     point = (await api(`/api/points/${pointId}`)).point;
   } catch (e) {
-    $main.innerHTML = emptyBox("⚠️", "加载失败", e.message);
+    $main.innerHTML = emptyBox("alert", "加载失败", e.message);
     return;
   }
 

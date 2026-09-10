@@ -6,6 +6,7 @@ import {
   $main, RECALL_SECONDS, api, esc, fmtClock, masteryLabel, refreshChip, state, toast,
 } from "../core.js";
 import { emptyBox, principleBlock, tagsBlock, vizBlock } from "../components.js";
+import { icons } from "../icons.js";
 
 let recallTimerId = null;
 let recallLeft = 0;
@@ -20,16 +21,16 @@ export function clearRecallTimer() {
 function startRecallTimer() {
   clearRecallTimer();
   recallLeft = RECALL_SECONDS;
-  const el = document.getElementById("veil-timer");
-  if (!el) return;
-  el.textContent = `⏱ ${fmtClock(recallLeft)}`;
+  const label = document.getElementById("veil-timer-text");
+  const chip = document.getElementById("veil-timer");
+  if (!label || !chip) return;
+  label.textContent = fmtClock(recallLeft);
   recallTimerId = setInterval(() => {
     recallLeft -= 1;
-    const t = document.getElementById("veil-timer");
-    if (t) {
-      t.textContent = `⏱ ${fmtClock(Math.max(0, recallLeft))}`;
-      t.classList.toggle("warn", recallLeft <= 10);
-    }
+    const t = document.getElementById("veil-timer-text");
+    const c = document.getElementById("veil-timer");
+    if (t) t.textContent = fmtClock(Math.max(0, recallLeft));
+    if (c) c.classList.toggle("warn", recallLeft <= 10);
     if (recallLeft <= 0) revealDraw();
   }, 1000);
 }
@@ -91,7 +92,7 @@ export async function renderDraw() {
   try {
     data = await api("/api/draw");
   } catch (e) {
-    $main.innerHTML = emptyBox("⚠️", "加载失败", e.message);
+    $main.innerHTML = emptyBox("alert", "加载失败", e.message);
     return;
   }
   state.drawPoint = data.point;
@@ -100,7 +101,7 @@ export async function renderDraw() {
   if (!data.point) {
     $main.innerHTML = `
       <section class="view">
-        ${emptyBox("🎉", "全部知识点都已进入学习循环",
+        ${emptyBox("check", "全部知识点都已进入学习循环",
           "没有可抽取的未学习知识点了，去复习巩固一下吧。",
           `<button class="btn btn-primary" data-goto="review">去复习</button>`)}
       </section>`;
@@ -123,7 +124,7 @@ export async function renderDraw() {
             ${tagsBlock(p)}
           </div>
           <div class="recall-float" id="recall-float">
-            <span class="veil-timer" id="veil-timer">⏱ ${fmtClock(RECALL_SECONDS)}</span>
+            <span class="veil-timer" id="veil-timer">${icons.clock}<span id="veil-timer-text">${fmtClock(RECALL_SECONDS)}</span></span>
             <div class="veil-center">
               <p class="veil-hint">先回忆一下</p>
               <p class="veil-sub">这个知识点讲的是什么？试着先自己说一遍</p>

@@ -4,6 +4,7 @@
    ============================================================ */
 
 import { esc, fmtDate, masteryLabel } from "./core.js";
+import { icons } from "./icons.js";
 
 /** 掌握度圆点（5 档，4 档以上变绿） */
 export function masteryDots(m) {
@@ -24,7 +25,8 @@ export function vizBlock(point) {
   const v = String(point.visualization || "").trim();
   if (!v) return "";
   if (/^https?:\/\//i.test(v)) {
-    return `<div class="viz"><a class="viz-link" href="${esc(v)}" target="_blank" rel="noopener">查看可视化讲解 ↗</a></div>`;
+    return `<div class="viz"><a class="viz-link" href="${esc(v)}" target="_blank" rel="noopener">`
+      + `查看可视化讲解 ${icons.external}</a></div>`;
   }
   return `<div class="viz"><span class="viz-note">可视化 · ${esc(v)}</span></div>`;
 }
@@ -40,12 +42,13 @@ export function principleBlock(point) {
 
 /**
  * 空状态卡片。
+ * @param {keyof typeof icons} icon  图标名（见 icons.js，替代 emoji）
  * 注意：title/desc 会转义；actionHTML 是前端自己写的受控片段，直接透传。
  */
 export function emptyBox(icon, title, desc, actionHTML = "") {
   return `
     <div class="empty">
-      <div class="empty-icon">${icon}</div>
+      <div class="empty-icon">${icons[icon] ?? ""}</div>
       <h3>${esc(title)}</h3>
       <p>${esc(desc)}</p>
       ${actionHTML}

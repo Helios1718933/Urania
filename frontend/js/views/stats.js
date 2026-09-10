@@ -11,7 +11,7 @@ export async function renderStats() {
   try {
     s = await api("/api/stats");
   } catch (e) {
-    $main.innerHTML = emptyBox("⚠️", "加载失败", e.message);
+    $main.innerHTML = emptyBox("alert", "加载失败", e.message);
     return;
   }
 
