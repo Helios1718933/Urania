@@ -28,7 +28,27 @@ def _days_between(start_iso: str, end_iso: str) -> int:
 
 
 class RepositoryError(Exception):
-    """业务错误（如知识点不存在、重名），API 层会转成 4xx。"""
+    """业务错误基类。子类通过 ``status`` 声明对应的 HTTP 状态码。"""
+
+    status = 400
+
+
+class ValidationError(RepositoryError):
+    """输入不合法（名称为空、字段格式错误等）→ 400。"""
+
+    status = 400
+
+
+class NotFoundError(RepositoryError):
+    """目标资源不存在 → 404。"""
+
+    status = 404
+
+
+class ConflictError(RepositoryError):
+    """与现有状态冲突（重复添加、重复标记）→ 409。"""
+
+    status = 409
 
 
 class KnowledgeRepository:
@@ -50,7 +70,7 @@ class KnowledgeRepository:
             "SELECT * FROM knowledge_points WHERE id = ?", (point_id,)
         ).fetchone()
         if row is None:
-            raise RepositoryError(f"知识点不存在: {point_id}")
+            raise NotFoundError(f"知识点不存在: {point_id}")
         return KnowledgePoint.from_row(row)
 
     def add_point(
@@ -63,7 +83,7 @@ class KnowledgeRepository:
     ) -> KnowledgePoint:
         """新增知识点。重名会抛 RepositoryError。"""
         if not name.strip():
-            raise RepositoryError("知识点名称不能为空")
+            raise ValidationError("知识点名称不能为空")
         now = date.today().isoformat()
         try:
             cur = self.conn.execute(
@@ -73,7 +93,7 @@ class KnowledgeRepository:
                  ",".join(t.strip() for t in (tags or []) if t.strip()), now, now),
             )
         except sqlite3.IntegrityError:
-            raise RepositoryError(f"知识点已存在: {name.strip()}")
+            raise ConflictError(f"知识点已存在: {name.strip()}")
         self.conn.commit()
         return self.get_point(cur.lastrowid)
 
@@ -127,7 +147,7 @@ class KnowledgeRepository:
         self.get_point(point_id)  # 不存在则抛错
         initial_mastery = max(config.MASTERY_MIN, min(3, int(initial_mastery)))
         if self.get_record(point_id) is not None:
-            raise RepositoryError(f"该知识点已在学习循环中: {point_id}")
+            raise ConflictError(f"该知识点已在学习循环中: {point_id}")
 
         record = LearningRecord(
             id=None, point_id=point_id, mastery=initial_mastery,
@@ -157,7 +177,7 @@ class KnowledgeRepository:
         """
         prev = self.get_record(point_id)
         if prev is None:
-            raise RepositoryError(f"学习记录不存在: {point_id}")
+            raise NotFoundError(f"学习记录不存在: {point_id}")
 
         updated = apply_rating(prev, rating)  # 纯函数，见 review.py
         scheduled_days = (date.fromisoformat(updated.next_review_at) - date.today()).days
@@ -179,14 +199,24 @@ class KnowledgeRepository:
             raise RepositoryError(f"学习记录更新后读取失败: {point_id}")
         return saved
 
-    def reset_point(self, point_id: int) -> None:
+    def reset_point(self, point_id: int) -> bool:
         """删除学习记录，让知识点回到「未标注 / 未学习」状态。
 
         review_logs 中的历史不受影响（外键指向知识点而非学习记录），
         因此重置不会抹掉已经积累的复习历史。
+
+        Returns:
+            True 表示确实删除了记录；False 表示本来就没有记录（幂等成功）。
+
+        Raises:
+            NotFoundError: 知识点本身不存在。
         """
-        self.conn.execute("DELETE FROM learning_records WHERE point_id = ?", (point_id,))
+        self.get_point(point_id)  # 不存在则抛 NotFoundError
+        cur = self.conn.execute(
+            "DELETE FROM learning_records WHERE point_id = ?", (point_id,)
+        )
         self.conn.commit()
+        return cur.rowcount > 0
 
     def _save(self, record: LearningRecord) -> None:
         """写入学习记录（不提交；事务由调用方控制）。"""

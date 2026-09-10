@@ -153,6 +153,93 @@ class TestAPI(RepoTestCase):
         sources = [row["source"] for row in payload["review_logs"]]
         self.assertEqual(sorted(sources), ["learn", "review"])
 
+    # ------------------------------------------------ 错误契约（状态码一致性）--
+
+    def test_learn_on_missing_point_returns_404(self):
+        status, _ = self.request("/api/points/999999/learn",
+                                 method="POST", body={"mastery": 1})
+        self.assertEqual(status, 404, "知识点不存在应是 404，而不是 400")
+
+    def test_duplicate_add_returns_409(self):
+        _, data = self.request("/api/draw")
+        name = data["point"]["name"]
+        status, payload = self.request("/api/points", method="POST",
+                                       body={"name": name, "category": "测试"})
+        self.assertEqual(status, 409)
+        self.assertIn("已存在", payload["error"])
+
+    def test_empty_name_returns_400(self):
+        status, _ = self.request("/api/points", method="POST", body={"name": "   "})
+        self.assertEqual(status, 400)
+
+    def test_non_integer_mastery_returns_400_not_500(self):
+        _, data = self.request("/api/draw")
+        pid = data["point"]["id"]
+        status, _ = self.request(f"/api/points/{pid}/learn",
+                                 method="POST", body={"mastery": "abc"})
+        self.assertEqual(status, 400, "非法数字应是 400，不能被当成服务器错误")
+
+    def test_invalid_json_body_returns_400(self):
+        req = urllib.request.Request(
+            self.base + "/api/points", method="POST",
+            data=b"{not json", headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req) as resp:
+                status = resp.status
+        except urllib.error.HTTPError as e:
+            status = e.code
+        self.assertEqual(status, 400)
+
+    def test_reset_missing_point_returns_404(self):
+        status, _ = self.request("/api/points/999999/record", method="DELETE")
+        self.assertEqual(status, 404)
+
+    def test_reset_without_record_is_idempotent(self):
+        _, data = self.request("/api/draw")
+        pid = data["point"]["id"]          # 未学习，无记录
+        status, payload = self.request(f"/api/points/{pid}/record", method="DELETE")
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["removed"], "本来就没有记录，应如实返回 removed=false")
+
+    def test_reset_existing_record_reports_removed(self):
+        _, data = self.request("/api/draw")
+        pid = data["point"]["id"]
+        self.request(f"/api/points/{pid}/learn", method="POST", body={"mastery": 1})
+        status, payload = self.request(f"/api/points/{pid}/record", method="DELETE")
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["removed"])
+
+    def test_unexpected_error_hides_internals(self):
+        """500 不能回显异常原文，只给错误编号。"""
+        def boom(*args, **kwargs):
+            raise RuntimeError("内部细节：SELECT * FROM secret_table")
+
+        original = self.repo.stats
+        self.repo.stats = boom  # type: ignore[method-assign]
+        try:
+            status, payload = self.request("/api/stats")
+        finally:
+            self.repo.stats = original  # type: ignore[method-assign]
+
+        self.assertEqual(status, 500)
+        self.assertNotIn("secret_table", payload["error"], "不能泄漏内部细节")
+        self.assertNotIn("Traceback", payload["error"])
+        self.assertIn("错误编号", payload["error"])
+
+    def test_request_is_logged(self):
+        with self.assertLogs("urania.api", level="INFO") as captured:
+            self.request("/api/health")
+        self.assertTrue(
+            any("GET /api/health" in line for line in captured.output),
+            "每个请求都应留下访问日志",
+        )
+
+    def test_business_error_is_logged(self):
+        with self.assertLogs("urania.api", level="INFO") as captured:
+            self.request("/api/points/999999")
+        self.assertTrue(any("NotFoundError" in line for line in captured.output))
+
 
 if __name__ == "__main__":
     unittest.main()

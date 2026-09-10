@@ -5,6 +5,7 @@
     GET    /api/config                 前端需要的领域常量（掌握度标签、自评档位）
     GET    /api/stats                  学习统计
     GET    /api/draw                   随机抽取一个未学习知识点（核心功能，不改变状态）
+    GET    /api/export                 导出全库（知识点 + 学习记录 + 复习日志 + 元信息）
     POST   /api/points                 新增知识点 {name, category, principle, visualization, tags}
     GET    /api/points                 全部知识点（含学习状态）
     GET    /api/points/{id}            知识点详情
@@ -12,23 +13,37 @@
     POST   /api/points/{id}/review     提交一次复习自评 {rating: forgot|fuzzy|solid}
     DELETE /api/points/{id}/record     删除学习记录（重置为未学习）
     GET    /api/review/queue           复习队列（到期优先，按掌握度升序）
+
+错误约定
+--------
+- 业务错误：``RepositoryError`` 的子类自带 ``status``（400 / 404 / 409），原样透传给客户端。
+- 未预期异常：记录完整堆栈到服务端日志，只回一个**带错误编号**的通用 500，
+  **不回显异常原文**（避免泄漏 SQL 片段与文件路径）。
 """
 from __future__ import annotations
 
 import json
+import logging
 import re
+import time
+import uuid
 from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
 from . import config, migrations, sampler
-from .repository import KnowledgeRepository, RepositoryError
+from .logging_setup import request_event
+from .repository import KnowledgeRepository, RepositoryError, ValidationError
 from .review import RATINGS, RATING_LABELS
+
+logger = logging.getLogger("urania.api")
 
 _STATIC_TYPES = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
     ".js": "application/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".webmanifest": "application/manifest+json; charset=utf-8",
     ".svg": "image/svg+xml",
     ".png": "image/png",
     ".ico": "image/x-icon",
@@ -40,17 +55,39 @@ def make_handler(repo: KnowledgeRepository):
         server_version = f"Urania/{config.APP_VERSION}"
         protocol_version = "HTTP/1.1"
 
-        # -------------------------------------------------------- 工具方法 --
-        def log_message(self, fmt, *args):  # 安静一些，只记录错误
-            pass
+        # ------------------------------------------------------------ 日志 --
+        def log_message(self, fmt, *args) -> None:  # noqa: N802 (基类命名)
+            """屏蔽基类往 stderr 裸打的日志——请求日志改由 _send 统一输出。"""
 
+        def log_error(self, fmt, *args) -> None:  # noqa: N802
+            logger.warning("HTTP 协议层错误: %s", fmt % args)
+
+        def handle_one_request(self) -> None:  # noqa: N802
+            self._started_at = time.perf_counter()
+            super().handle_one_request()
+
+        def _log_request(self, status: int, size: int) -> None:
+            started = getattr(self, "_started_at", None)
+            duration_ms = (time.perf_counter() - started) * 1000 if started else 0.0
+            method = getattr(self, "command", "-")
+            path = urlparse(getattr(self, "path", "")).path
+            logger.info(
+                "%s %s → %s (%.1fms)", method, path, status, duration_ms,
+                extra={"event": request_event(method, path, status, duration_ms, size)},
+            )
+
+        # -------------------------------------------------------- 工具方法 --
         def _send(self, body: bytes, content_type: str, status: int = 200) -> None:
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store" if content_type.startswith("application/json") else "no-cache")
+            self.send_header(
+                "Cache-Control",
+                "no-store" if content_type.startswith("application/json") else "no-cache",
+            )
             self.end_headers()
             self.wfile.write(body)
+            self._log_request(status, len(body))
 
         def _json(self, obj, status: int = 200) -> None:
             self._send(json.dumps(obj, ensure_ascii=False).encode("utf-8"),
@@ -59,14 +96,29 @@ def make_handler(repo: KnowledgeRepository):
         def _error(self, status: int, message: str) -> None:
             self._json({"error": message}, status)
 
+        def _repo_error(self, exc: RepositoryError) -> None:
+            """业务错误：按异常自带的状态码透传。"""
+            status = getattr(exc, "status", 400)
+            logger.info("业务错误 %s(%s): %s", type(exc).__name__, status, exc)
+            self._error(status, str(exc))
+
+        def _internal_error(self, exc: Exception) -> None:
+            """未预期异常：服务端留堆栈，客户端只拿到错误编号。"""
+            error_id = uuid.uuid4().hex[:8]
+            logger.exception(
+                "请求处理失败 [%s] %s %s", error_id,
+                getattr(self, "command", "-"), getattr(self, "path", "-"),
+            )
+            self._error(500, f"服务器内部错误（错误编号 {error_id}），详情见服务端日志")
+
         def _body(self) -> dict:
             length = int(self.headers.get("Content-Length") or 0)
             if length == 0:
                 return {}
             try:
                 return json.loads(self.rfile.read(length).decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                raise RepositoryError("请求体不是合法的 JSON")
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise ValidationError("请求体不是合法的 JSON") from exc
 
         def _static(self, rel: str) -> None:
             """安全地返回 frontend/ 下的静态文件。"""
@@ -80,7 +132,7 @@ def make_handler(repo: KnowledgeRepository):
                 return
             self._send(target.read_bytes(), _STATIC_TYPES[target.suffix])
 
-        # -------------------------------------------------------- 路由 --
+        # ------------------------------------------------------------ 路由 --
         def do_GET(self):  # noqa: N802
             path = urlparse(self.path).path
             try:
@@ -103,9 +155,10 @@ def make_handler(repo: KnowledgeRepository):
                 elif path == "/api/stats":
                     self._json(repo.stats())
                 elif path == "/api/draw":
-                    point = sampler.draw_unlearned(repo.unlearned_points())
+                    candidates = repo.unlearned_points()   # 只查一次
+                    point = sampler.draw_unlearned(candidates)
                     self._json({"point": repo.merged(point, None) if point else None,
-                                "remaining": len(repo.unlearned_points())})
+                                "remaining": len(candidates)})
                 elif path == "/api/export":
                     payload = repo.export_all()
                     payload["meta"] = {
@@ -132,9 +185,9 @@ def make_handler(repo: KnowledgeRepository):
                     else:
                         self._error(404, "接口不存在")
             except RepositoryError as e:
-                self._error(404, str(e))
+                self._repo_error(e)
             except Exception as e:  # noqa: BLE001
-                self._error(500, f"服务器内部错误: {e}")
+                self._internal_error(e)
 
         def do_POST(self):  # noqa: N802
             path = urlparse(self.path).path
@@ -142,7 +195,7 @@ def make_handler(repo: KnowledgeRepository):
                 m = re.fullmatch(r"/api/points/(\d+)/learn", path)
                 if m:
                     point_id = int(m.group(1))
-                    mastery = int(self._body().get("mastery", 1))
+                    mastery = self._parse_int(self._body().get("mastery", 1), "mastery")
                     repo.mark_learned(point_id, mastery)
                     p = repo.get_point(point_id)
                     self._json({"point": repo.merged(p, repo.get_record(point_id))})
@@ -177,20 +230,30 @@ def make_handler(repo: KnowledgeRepository):
 
                 self._error(404, "接口不存在")
             except RepositoryError as e:
-                self._error(400, str(e))
+                self._repo_error(e)
             except Exception as e:  # noqa: BLE001
-                self._error(500, f"服务器内部错误: {e}")
+                self._internal_error(e)
 
         def do_DELETE(self):  # noqa: N802
             path = urlparse(self.path).path
             try:
                 m = re.fullmatch(r"/api/points/(\d+)/record", path)
                 if m:
-                    repo.reset_point(int(m.group(1)))
-                    self._json({"ok": True})
-                else:
-                    self._error(404, "接口不存在")
+                    removed = repo.reset_point(int(m.group(1)))
+                    self._json({"ok": True, "removed": removed})
+                    return
+                self._error(404, "接口不存在")
+            except RepositoryError as e:
+                self._repo_error(e)
             except Exception as e:  # noqa: BLE001
-                self._error(500, f"服务器内部错误: {e}")
+                self._internal_error(e)
+
+        # ------------------------------------------------------------ 辅助 --
+        @staticmethod
+        def _parse_int(value, field: str) -> int:
+            try:
+                return int(value)
+            except (TypeError, ValueError) as exc:
+                raise ValidationError(f"{field} 必须是整数") from exc
 
     return UraniaRequestHandler

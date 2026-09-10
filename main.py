@@ -26,11 +26,10 @@ import urllib.request
 import webbrowser
 
 from urania import config, db, seed
+from urania.logging_setup import setup_logging
 from urania.repository import KnowledgeRepository
 from urania.server import create_server
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
-                    datefmt="%H:%M:%S")
 logger = logging.getLogger("urania")
 
 PORT_SCAN_RANGE = 20  # 首选端口被占用时，向后尝试的端口数
@@ -124,6 +123,7 @@ def open_native_window(url: str) -> bool:
 
 
 def main() -> int:
+    setup_logging()
     args = parse_args()
 
     # ---- 单实例判定：文件锁是权威，网络探测只是兜底 ----
