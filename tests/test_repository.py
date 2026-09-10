@@ -66,11 +66,10 @@ class TestLearningRecords(RepoTestCase):
         self.repo.mark_learned(pid, 1)
 
     def test_stats(self):
-        from urania.review import apply_rating
         ids = self.all_ids()
         # 初始掌握度上限 3（熟悉）；复习一次 solid 达到 4 级才算「已掌握」
-        rec = self.repo.mark_learned(ids[0], 3)
-        self.repo.save_review(apply_rating(rec, "solid"))
+        self.repo.mark_learned(ids[0], 3)
+        self.repo.apply_review(ids[0], "solid")
         self.repo.mark_learned(ids[1], 2)   # 学习中
         s = self.repo.stats()
         self.assertEqual(s["total"], 10)

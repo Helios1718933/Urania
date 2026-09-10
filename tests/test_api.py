@@ -127,6 +127,32 @@ class TestAPI(RepoTestCase):
         status, _ = self.request("/css/../urania/config.py")
         self.assertEqual(status, 404)
 
+    def test_export_endpoint(self):
+        _, data = self.request("/api/draw")
+        pid = data["point"]["id"]
+        self.request(f"/api/points/{pid}/learn", method="POST", body={"mastery": 2})
+        self.request(f"/api/points/{pid}/review", method="POST", body={"rating": "solid"})
+
+        status, payload = self.request("/api/export")
+        self.assertEqual(status, 200)
+        self.assertEqual(set(payload) & {"knowledge_points", "learning_records", "review_logs"},
+                         {"knowledge_points", "learning_records", "review_logs"})
+        self.assertEqual(len(payload["learning_records"]), 1)
+        self.assertEqual(len(payload["review_logs"]), 2)
+        self.assertEqual(payload["meta"]["app"], "Urania")
+        self.assertIn("schema_version", payload["meta"])
+
+    def test_review_writes_log_not_just_counter(self):
+        """复习后除计数外，历史日志也应落库（接口层验证）。"""
+        _, data = self.request("/api/draw")
+        pid = data["point"]["id"]
+        self.request(f"/api/points/{pid}/learn", method="POST", body={"mastery": 1})
+        self.request(f"/api/points/{pid}/review", method="POST", body={"rating": "fuzzy"})
+
+        _, payload = self.request("/api/export")
+        sources = [row["source"] for row in payload["review_logs"]]
+        self.assertEqual(sorted(sources), ["learn", "review"])
+
 
 if __name__ == "__main__":
     unittest.main()

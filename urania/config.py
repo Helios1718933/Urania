@@ -16,6 +16,7 @@ PACKAGE_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = PACKAGE_ROOT.parent
 DATA_DIR = Path(os.environ.get("URANIA_DATA_DIR", PROJECT_ROOT / "data"))
 DB_PATH = Path(os.environ.get("URANIA_DB", DATA_DIR / "urania.db"))
+BACKUP_DIR = Path(os.environ.get("URANIA_BACKUP_DIR", DATA_DIR / "backups"))
 SEED_FILE = DATA_DIR / "seed_knowledge.json"
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 

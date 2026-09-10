@@ -1,0 +1,305 @@
+# 知识点全量导出（格式审阅用）
+
+> 导出日期：2026-09-09 ｜ 来源：data/urania.db ｜ 共 31 条
+> 这是数据库快照，仅供审阅；**数据源是 `data/seed_knowledge.json`**，
+> 内容修改请改种子文件后执行 `./scripts/reset_db.sh`（会清空学习记录）
+> 或写增量脚本导入（保留学习记录）。
+
+## 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| name | str | 知识点名称（唯一键） |
+| category | str | 分类（5 类之一） |
+| principle | str | 原理讲解（纯文本，前端按空行分段） |
+| visualization | str | 可视化：https 链接 或 文字说明 或 空 |
+| tags | list[str] | 标签（种子 JSON 里是数组，库中存逗号串） |
+
+## AI / 机器学习
+
+### 14. 梯度下降
+
+- **tags**: 优化、高频面试
+- **principle** (129字):
+
+  > 沿损失函数的负梯度方向迭代更新参数：θ ← θ − η·∇L。学习率 η 过大则震荡发散，过小则收敛缓慢。按每次更新使用多少样本分为批量（稳定但慢）、随机（噪声大但快）、小批量（工程默认）三种形态。Momentum/Adam 等变体用历史梯度自适应调节步长。
+
+- **visualization**: https://mlu-explain.github.io/gradient-descent/
+
+### 15. 过拟合与正则化
+
+- **tags**: 模型选择、高频面试
+- **principle** (142字):
+
+  > 模型把训练集里的噪声也当作规律记住，表现为训练误差很低但验证/测试误差明显更高。对策：L1/L2 正则约束参数复杂度、Dropout 随机失活、早停（early stopping）、数据增强扩充样本、以及用交叉验证做模型选择。L1 产生稀疏解可用于特征选择，L2 倾向把权重整体压小。
+
+- **visualization**: （空）
+
+### 16. 偏差-方差权衡
+
+- **tags**: 模型选择、理论
+- **principle** (127字):
+
+  > 偏差来自模型对真实规律的系统性拟合不足（通常模型太简单），方差来自模型对训练数据扰动的过度敏感（通常模型太复杂或数据太少）。期望泛化误差 ≈ 偏差² + 方差 + 不可约噪声。增大模型容量降低偏差却抬高方差，正则与增数据则反向，调优就是在二者间找最优点。
+
+- **visualization**: （空）
+
+### 17. 交叉验证
+
+- **tags**: 评估、工程
+- **principle** (130字):
+
+  > 把数据分成 K 折，轮流用其中一折做验证、其余做训练，得到 K 个性能估计取平均，让每个样本都参与验证。比单次 train/test 划分更稳健，尤其适合小数据集的调参与模型比较。类别不平衡时用分层 K 折保持各折标签比例；同时做选模型与评估时用嵌套交叉验证。
+
+- **visualization**: https://scikit-learn.org/stable/modules/cross_validation.html
+
+### 18. 特征工程
+
+- **tags**: 数据、工程
+- **principle** (142字):
+
+  > 把原始数据变换为模型更容易利用的特征：数值缩放（标准化/归一化）、类别编码（one-hot/target encoding）、分箱离散化、交叉特征、时间窗统计、缺失值处理等。传统模型时代“数据和特征决定上限，算法只是逼近上限”；树模型对单调变换不敏感，而线性模型与神经网络对尺度敏感。
+
+- **visualization**: （空）
+
+### 19. 集成学习：Bagging 与 Boosting
+
+- **tags**: 模型、高频面试
+- **principle** (152字):
+
+  > Bagging 并行训练多个基学习器再投票/平均，主要降低方差，代表是随机森林（bootstrap 采样 + 随机特征子集去相关）。Boosting 串行训练，每一步拟合前一轮的残差（GBDT 思路），主要降低偏差，代表是 XGBoost/LightGBM。表格数据竞赛与工业界至今仍是梯度提升树的天下。
+
+- **visualization**: （空）
+
+### 20. 朴素贝叶斯
+
+- **tags**: 模型、概率
+- **principle** (115字):
+
+  > 基于贝叶斯定理并假设特征条件独立的分类器：P(y|x) ∝ P(y)·∏P(xi|y)。“朴素”即指这个强假设，它让参数估计从指数级降到线性。训练就是数频率，推断就是连乘（工程上取对数防下溢）。文本分类、垃圾邮件过滤的经典强基线。
+
+- **visualization**: https://scikit-learn.org/stable/modules/naive_bayes.html
+
+## Python 基础
+
+### 1. 列表推导式
+
+- **tags**: 语法、高频面试
+- **principle** (107字):
+
+  > 在一行内对可迭代对象逐项求值并收集结果来构建新列表的语法糖，等价于 for 循环 + append。底层由专门的 LIST_APPEND 字节码完成追加，比等价循环更快。条件过滤、嵌套循环、笛卡尔积都可以自然表达。
+
+- **visualization**: https://docs.python.org/zh-cn/3/tutorial/datastructures.html#list-comprehensions
+
+### 2. 装饰器
+
+- **tags**: 高阶函数、高频面试
+- **principle** (136字):
+
+  > 本质是「接收函数并返回新函数」的高阶函数，@deco 语法糖等价于 func = deco(func)。它让我们在不修改原函数代码与调用方式的前提下叠加日志、缓存、计时、权限校验等横切逻辑。带参装饰器是三层嵌套函数；functools.wraps 用于保留原函数的元信息。
+
+- **visualization**: https://docs.python.org/zh-cn/3/glossary.html#term-decorator
+
+### 3. 生成器与 yield
+
+- **tags**: 迭代器、惰性求值
+- **principle** (116字):
+
+  > 函数体内出现 yield 即为生成器函数：调用它不执行代码，而是返回生成器对象；每次 next() 执行到下一个 yield 处暂停并保存全部局部状态。由此获得惰性求值与近似恒定的内存占用，是处理大文件、无限序列、流水线的标准工具。
+
+- **visualization**: https://realpython.com/introduction-to-python-generators/
+
+### 4. 上下文管理器与 with
+
+- **tags**: 资源管理、协议
+- **principle** (135字):
+
+  > with 语句在进入和退出代码块时自动调用对象的 __enter__ 与 __exit__，即使块内抛出异常也能保证资源被释放，是文件、锁、数据库连接管理的标准姿势。除实现协议的类之外，contextlib.contextmaker 可以把生成器函数装饰成上下文管理器。
+
+- **visualization**: https://docs.python.org/zh-cn/3/reference/datamodel.html#with-statement-context-managers
+
+### 5. GIL 全局解释器锁
+
+- **tags**: 并发、高频面试
+- **principle** (123字):
+
+  > CPython 中保证同一时刻只有一个线程执行 Python 字节码的互斥锁。线程做 I/O 阻塞时会主动释放 GIL，因此 I/O 密集任务多线程仍然有效；CPU 密集任务则要用多进程或释放 GIL 的 C 扩展（如 NumPy）才能真正并行。
+
+- **visualization**: https://wiki.python.org/moin/GlobalInterpreterLock
+
+### 6. 浅拷贝与深拷贝
+
+- **tags**: 对象模型、高频面试
+- **principle** (113字):
+
+  > copy.copy 只复制容器本身，嵌套的内部对象仍然是共享引用；copy.deepcopy 会递归复制整棵对象图，并用 memo 字典正确处理循环引用。可变默认参数陷阱与它同源：默认参数在函数定义时求值一次，被所有调用共享。
+
+- **visualization**: https://docs.python.org/zh-cn/3/library/copy.html
+
+### 7. 可变与不可变类型
+
+- **tags**: 对象模型
+- **principle** (114字):
+
+  > int/str/tuple 不可变，任何“修改”实际是创建新对象；list/dict/set 可变，原地修改会反映到所有引用处。函数传参传的是对象引用。字典的键必须可哈希（通常即不可变），这一要求的根源就是可变性会破坏哈希定位。
+
+- **visualization**: （空）
+
+## Python 进阶
+
+### 8. asyncio 与事件循环
+
+- **tags**: 并发、异步
+- **principle** (135字):
+
+  > 单线程协作式并发模型：事件循环调度协程，await 处让出控制权，待 I/O 就绪后再恢复执行。适合高并发网络 I/O；CPU 密集计算会阻塞整个循环，应丢进进程池。async/await 是核心语法，asyncio.gather / TaskGroup 负责并发编排。
+
+- **visualization**: https://docs.python.org/zh-cn/3/library/asyncio.html
+
+### 9. 闭包与 LEGB 作用域
+
+- **tags**: 函数式、高频面试
+- **principle** (151字):
+
+  > 内层函数引用外层函数的局部变量并随之被返回时形成闭包，被捕获的变量生命周期因此延长。名字查找顺序为 Local → Enclosing → Global → Builtins。经典延迟绑定陷阱：循环里创建的闭包共享同一个循环变量，需用默认参数或 functools.partial 在创建时固化当前值。
+
+- **visualization**: （空）
+
+### 10. 元类 metaclass
+
+- **tags**: 对象模型、进阶
+- **principle** (146字):
+
+  > 类本身也是对象，它的类型就是元类，默认是 type。自定义元类（或更轻量的 __init_subclass__ 钩子）可以在类被创建时拦截、校验、改写类定义。ORM 模型（如 Django Model）、接口注册、单例模式都靠它实现。理解“type 创建类、元类定制 type 的行为”即可。
+
+- **visualization**: https://docs.python.org/zh-cn/3/reference/datamodel.html#metaclasses
+
+### 11. 描述符协议
+
+- **tags**: 对象模型、进阶
+- **principle** (148字):
+
+  > 定义了 __get__/__set__/__delete__ 中任一方法的类，作为类属性使用时会接管对该属性的访问，这是 property、classmethod、staticmethod 以及 ORM 字段的统一底层机制。数据描述符（含 __set__）优先级高于实例字典，非数据描述符则相反。
+
+- **visualization**: https://docs.python.org/zh-cn/3/howto/descriptor.html
+
+### 12. __slots__ 与实例字典
+
+- **tags**: 性能、内存
+- **principle** (143字):
+
+  > 默认情况下实例属性存放在每实例一个的 __dict__ 里，灵活但内存开销大。定义 __slots__ 后改为固定的槽位存储：省内存、属性更严格，代价是失去动态添加属性的能力（除非加 __dict__ 槽）与默认弱引用支持（除非显式加 __weakref__）。大量小对象场景收益明显。
+
+- **visualization**: （空）
+
+### 13. multiprocessing 多进程
+
+- **tags**: 并发、并行
+- **principle** (139字):
+
+  > 每个子进程拥有独立的解释器与 GIL，是 Python 绕开 GIL 利用多核 CPU 的标准方案。进程间通信用 Pipe/Queue/共享内存，数据必须可序列化（pickle），序列化与进程启动开销是主要成本。fork 与 spawn 两种启动方式在资源继承与安全上差异显著。
+
+- **visualization**: https://docs.python.org/zh-cn/3/library/multiprocessing.html
+
+### 31. 协程与生成器的关系
+
+- **tags**: 并发、进阶
+- **principle** (158字):
+
+  > async/await 语法出现之前，协程由生成器演化而来：yield 可以接收 send() 传入的值（yield 表达式），使生成器从“产出数据”变成“可暂停并双向通信的函数”。async def 则是基于同一暂停/恢复思想的现代原生协程，await 挂起点等价于 yield 点。理解这条演化线能同时讲清两者。
+
+- **visualization**: （空）
+
+## 工程实践
+
+### 27. SQL 索引原理
+
+- **tags**: 数据库、高频面试
+- **principle** (126字):
+
+  > 索引（默认 B+ 树）把全表扫描的 O(n) 查找降到 O(log n)，叶子节点存主键并相互链接以支持范围扫描。代价：拖慢写入、占用额外空间。使用要点：联合索引的最左前缀原则、覆盖索引避免回表、用 EXPLAIN 分析执行计划、避免在索引列上套函数。
+
+- **visualization**: https://use-the-index-luke.com/
+
+### 28. RESTful API 设计
+
+- **tags**: Web、后端
+- **principle** (163字):
+
+  > URL 表达资源名词（复数），动作交给 HTTP 方法（GET/POST/PUT/PATCH/DELETE），状态码语义化（200/201/400/401/404/422/500）。核心约束是无状态：每个请求自包含。工程惯例：URL 版本化（/v1）、分页、幂等性意识（GET/PUT/DELETE 幂等，POST 不幂等）。
+
+- **visualization**: https://restfulapi.net/
+
+### 29. Git 分支工作流
+
+- **tags**: 协作、工具
+- **principle** (133字):
+
+  > 主干保持随时可发布，功能在 feature 分支开发，经 PR/MR 代码评审后合入。merge 保留分支拓扑、历史真实但呈网状；rebase 把提交搬到新基底上，历史线性干净但改写提交要避免用在已推送的公共分支。同步远端的标准动作是 fetch + rebase。
+
+- **visualization**: https://git-scm.com/book/zh/v2/Git-分支-分支的新建与合并
+
+### 30. Docker 镜像与容器
+
+- **tags**: 部署、工具
+- **principle** (139字):
+
+  > 镜像 = 分层的只读文件系统模板 + 启动命令；容器 = 镜像加一个可写层的运行实例，靠 namespace 隔离视图、cgroup 限制资源，共享内核故比虚拟机轻量。Dockerfile 每条指令生成一层，层缓存让未变动的前置步骤跳过执行；把变动频繁的层放最后可显著加速构建。
+
+- **visualization**: https://docs.docker.com/get-started/docker-concepts/building-images/
+
+## 深度学习
+
+### 21. 反向传播
+
+- **tags**: 训练、高频面试
+- **principle** (129字):
+
+  > 利用链式法则从输出层向输入层逐层计算损失对每个参数的梯度：前向传播记录每步中间结果，反向沿计算图逆向相乘得到全部梯度。PyTorch 的 loss.backward() 就是在动态图上做这件事。理解“局部梯度相乘”就能解释梯度消失/爆炸与残差连接为什么有效。
+
+- **visualization**: https://colah.github.io/posts/2015-08-Backprop/
+
+### 22. CNN 卷积神经网络
+
+- **tags**: 视觉、架构
+- **principle** (125字):
+
+  > 用卷积核在输入上滑动做局部加权求和提取特征，两大归纳偏置：局部连接（邻近像素相关性高）与权值共享（同一模式可出现在任意位置），使参数量远小于全连接并带来平移等变性。典型结构为「卷积→非线性→池化」堆叠，感受野逐层扩大，浅层学边缘纹理，深层学语义部件。
+
+- **visualization**: https://poloclub.github.io/cnn-explainer/
+
+### 23. Transformer 与自注意力
+
+- **tags**: 架构、高频面试
+- **principle** (148字):
+
+  > 自注意力对每个 token 计算 Q、K、V：用 Q 与所有 K 的点积除以 √d 后经 softmax 得到权重，再加权求和 V——任意两个位置直接交互且完全可并行。多头注意力在多个子空间并行捕捉不同关系，位置编码补充顺序信息。Transformer 是 BERT/GPT 等大模型的统一底座。
+
+- **visualization**: https://jalammar.github.io/illustrated-transformer/
+
+### 24. 词向量与 Word2Vec
+
+- **tags**: NLP、表示学习
+- **principle** (135字):
+
+  > 用“预测上下文”（Skip-gram）或“由上下文预测中心词”（CBOW）这一自监督任务，把词训练成稠密向量。训练完的向量空间呈现著名的线性类比关系：king − man + woman ≈ queen。本质可视为对共现统计矩阵做隐式分解，GloVe 则显式做了这件事。
+
+- **visualization**: https://jalammar.github.io/illustrated-word2vec/
+
+### 25. 批归一化 BatchNorm
+
+- **tags**: 训练、架构
+- **principle** (140字):
+
+  > 对每个 mini-batch 内的特征做标准化，再经可学习的 γ（缩放）与 β（平移）恢复表达能力。作用是平滑损失曲面、允许更大学习率、缓解对初始化的敏感；推理阶段改用训练期间累积的移动平均统计量。LayerNorm 不依赖 batch 维度，是 Transformer 的标配。
+
+- **visualization**: （空）
+
+### 26. 交叉熵损失
+
+- **tags**: 损失函数、基础
+- **principle** (138字):
+
+  > 度量两个概率分布的差异：L = −Σ y·log ŷ，真实分布 y 只在正确类为 1，所以即 −log(正确类概率)。配合 softmax 后其对 logits 的梯度恰为 (ŷ − y)，形式简洁且没有 sigmoid+MSE 的梯度饱和减速问题，因此是分类任务的标准损失。
+
+- **visualization**: （空）

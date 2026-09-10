@@ -12,6 +12,8 @@
 - 📊 **统计总览**：学习进度环、未学习 / 学习中 / 已掌握 / 今日应复习计数、五档掌握度分布
 - 🍎 **Apple HIG 风格 UI**：系统字体栈（SF Pro / 苹方）、macOS 系统色板、分段控件、毛玻璃工具栏、深色 / 浅色模式自动适配
 - 💾 **内置小数据库**：SQLite 单文件（`data/urania.db`），首次启动自动建库并导入 31 个 Python / AI 示例知识点（`data/seed_knowledge.json`，占位数据，可自行替换）
+- 📜 **复习历史可追溯**：`review_logs` 只追加表记录每一次标记与自评（评档、前后掌握度、间隔天数），为将来的遗忘曲线与保留率统计留数据
+- 🛡 **数据安全**：`./scripts/backup_db.sh` 一键备份到 `data/backups/`；架构升级前自动备份；`--reset` 与重置脚本删库前也会先备份；`GET /api/export` 可导出全量 JSON
 - 🐍 **核心功能纯 Python 实现**：随机抽取、复习调度、数据库、HTTP API 全部基于 Python 标准库（`sqlite3` / `http.server` / `random`），**零第三方依赖**
 - 🖥 **两种窗口形态**：安装 `pywebview` 后以原生窗口运行；未安装则自动退回浏览器打开（界面观感一致）
 

@@ -97,3 +97,58 @@ class LearningRecord:
             "next_review_at": self.next_review_at,
             "is_due": self.next_review_at <= _today(),
         }
+
+
+# 事件来源：标记学习 / 复习自评
+SOURCE_LEARN = "learn"
+SOURCE_REVIEW = "review"
+
+
+@dataclass
+class ReviewLog:
+    """一次学习或复习事件的只追加记录（对标 Anki 的 revlog）。
+
+    ``learning_records`` 存「当前状态」（每点一行、会被覆盖），本模型对应
+    「历史事件」（每次追加一行、永不修改）。两者分离后才能真正统计遗忘曲线、
+    真实保留率，并为将来的调度算法调优保留原始数据。
+    """
+
+    id: Optional[int]
+    point_id: int
+    source: str                        # learn | review
+    rating: Optional[str]              # forgot | fuzzy | solid；标记学习时为 None
+    reviewed_at: str
+    elapsed_days: Optional[int]        # 距上次复习的天数；首次为 None
+    scheduled_days: Optional[int]      # 本次安排的下次间隔天数
+    prev_mastery: Optional[int]        # 变更前掌握度；首次为 None
+    new_mastery: int
+    created_at: str = field(default_factory=_now)
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> "ReviewLog":
+        return cls(
+            id=row["id"],
+            point_id=row["point_id"],
+            source=row["source"],
+            rating=row["rating"],
+            reviewed_at=row["reviewed_at"],
+            elapsed_days=row["elapsed_days"],
+            scheduled_days=row["scheduled_days"],
+            prev_mastery=row["prev_mastery"],
+            new_mastery=row["new_mastery"],
+            created_at=row["created_at"],
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "point_id": self.point_id,
+            "source": self.source,
+            "rating": self.rating,
+            "reviewed_at": self.reviewed_at,
+            "elapsed_days": self.elapsed_days,
+            "scheduled_days": self.scheduled_days,
+            "prev_mastery": self.prev_mastery,
+            "new_mastery": self.new_mastery,
+            "created_at": self.created_at,
+        }

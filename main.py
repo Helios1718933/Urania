@@ -146,9 +146,13 @@ def main() -> int:
         return 0
 
     # ---- 本进程作为服务端 ----
-    if args.reset and config.DB_PATH.exists():
-        config.DB_PATH.unlink()
-        logger.info("已删除旧数据库: %s", config.DB_PATH)
+    if args.reset:
+        backup = db.backup_database(config.DB_PATH)
+        if backup is not None:
+            logger.info("重置前已备份数据库: %s", backup)
+        if config.DB_PATH.exists():
+            config.DB_PATH.unlink()
+            logger.info("已删除旧数据库: %s", config.DB_PATH)
 
     conn = db.init(config.DB_PATH)
     repo = KnowledgeRepository(conn)

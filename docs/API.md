@@ -66,6 +66,9 @@ Base URL：`http://127.0.0.1:8765`（仅本机回环，端口可用 `--port` 修
 `rating ∈ {forgot, fuzzy, solid}`；非法值 400，无学习记录 404。
 返回更新后的 `{"point": …}`（含新的 mastery、status、next_review_at）。
 
+> 该接口在**同一事务内**完成三件事：读取当前状态 → 计算新状态 → 写入学习记录 +
+> 追加一条 `review_logs` 历史日志。并发调用不会丢失更新。
+
 ### `DELETE /api/points/{id}/record`
 删除学习记录，知识点回到「未标注 / 未学习」。`{"ok": true}`。
 
@@ -85,6 +88,27 @@ Base URL：`http://127.0.0.1:8765`（仅本机回环，端口可用 `--port` 修
   "mastery_distribution": {"1": 2, "2": 1, "3": 2, "4": 0, "5": 0}
 }
 ```
+
+## 数据导出
+
+### `GET /api/export`
+导出全库内容，用于备份与迁移。返回三张表的原始行 + 元信息。
+```json
+{
+  "knowledge_points": [ { "id": 1, "name": "…", "…": "…" } ],
+  "learning_records": [ { "point_id": 1, "mastery": 3, "…": "…" } ],
+  "review_logs":      [ { "point_id": 1, "source": "review", "rating": "solid",
+                          "prev_mastery": 2, "new_mastery": 3,
+                          "elapsed_days": 0, "scheduled_days": 5, "…": "…" } ],
+  "meta": {
+    "app": "Urania", "app_version": "0.1.0",
+    "schema_version": 1, "exported_at": "2026-09-10T20:01:08"
+  }
+}
+```
+
+> 数据库文件的整库快照请用 `./scripts/backup_db.sh`（`VACUUM INTO`，可对运行中的库安全执行），
+> 备份文件落在 `data/backups/`；架构迁移前也会自动生成一次。
 
 ## 静态页面
 

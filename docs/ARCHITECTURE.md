@@ -19,8 +19,10 @@
 │  review.py   自评三档 → 掌握度/间隔更新（SRS-lite）  │
 ├────────────────────────────────────────────────────┤
 │  repository.py（唯一允许写 SQL 的地方）              │
+│    学习记录与复习日志在同一事务内写入                  │
 ├────────────────────────────────────────────────────┤
-│  db.py + models.py + seed.py（SQLite / 数据模型）   │
+│  db.py（连接/备份）+ migrations.py（schema 版本管理）│
+│  models.py + seed.py                                │
 └────────────────────────────────────────────────────┘
 ```
 
@@ -28,8 +30,18 @@
 
 - `sampler.py` / `review.py` 是**纯函数层**，不 import sqlite3、不做 I/O，随机源通过 `rng` 参数注入便于测试。
 - SQL 只出现在 `repository.py`；API 层不写 SQL，只调用仓库方法。
+- `repository.py` 依赖 `review.apply_rating`（纯函数）以在**同一事务内**完成「读 → 算 → 写记录 + 写日志」，避免并发丢失更新。
 - `api.py` 只做路由、JSON 编解码与错误码转换（`RepositoryError` → 400/404，其余 → 500）。
+- `migrations.py` 不依赖任何业务模块，只依赖标准库；`db.py` 依赖 `migrations`。
 - 前端不依赖任何框架与构建工具；`app.js` 中所有服务端数据的插值必须经过 `esc()` 转义。
+
+## 1.5 架构迁移（schema 版本管理）
+
+- 版本号以 SQLite 官方的 `PRAGMA user_version` 为**唯一事实来源**；`schema_migrations` 表只作审计日志。
+- `MIGRATIONS` 是有序列表（`migrations.py`），启动时对比版本依次应用。
+- **迁移前自动备份**：`db.init()` 检测到有待应用迁移时，先 `VACUUM INTO data/backups/` 生成一致性快照；新建库不备份。
+- 迁移函数必须用 `conn.execute()` 逐条执行，**不能用 `executescript()`**——后者会隐式提交，破坏迁移的事务性。
+- 新增迁移的步骤：写 `_migration_NNN_xxx(conn)` → 追加到 `MIGRATIONS` → 补测试到 `tests/test_migrations.py`。
 
 ## 2. 数据模型
 
@@ -43,10 +55,20 @@ principle     NOT NULL               mastery      1~5
 visualization TEXT                   review_count INTEGER
 tags          CSV TEXT               last_reviewed_at ISO 时间
 created_at / updated_at              next_review_at  YYYY-MM-DD（用于到期判断）
+
+review_logs（只追加，对标 Anki 的 revlog）
+──────────────────────────────────────────
+id  PK                               point_id  FK → knowledge_points.id
+source     learn | review            rating    forgot | fuzzy | solid（learn 时为 NULL）
+reviewed_at  秒级 ISO                 elapsed_days    距上次复习天数（首次 NULL）
+scheduled_days  本次安排的下次间隔      prev_mastery    变更前掌握度（首次 NULL）
+new_mastery                          created_at
 ```
 
 - **「未标注」的定义**：`knowledge_points` 中没有对应 `learning_records` 行。抽取查询用 `LEFT JOIN ... WHERE r.id IS NULL`。
 - 一对一关系（`point_id UNIQUE`）：一个知识点最多一条学习记录，学习状态内联在记录上而不是知识点上。
+- **状态与事件分离**：`learning_records` 存「当前状态」（每点一行、会被覆盖），`review_logs` 存「历史事件」（每次追加、永不修改）。分离后才能统计遗忘曲线与真实保留率，也是将来升级调度算法的数据基础。
+- `review_logs` 的外键指向**知识点**而非学习记录，所以「重置为未学习」（删除学习记录）不会抹掉已积累的历史。
 - `seed.py` 按名称幂等导入：种子文件里已有条目不会被覆盖，用户的学习记录永远优先。
 
 ## 3. 领域规则（状态机与算法）

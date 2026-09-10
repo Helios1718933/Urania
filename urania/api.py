@@ -17,13 +17,13 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import date
+from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
-from . import config, sampler
+from . import config, migrations, sampler
 from .repository import KnowledgeRepository, RepositoryError
-from .review import RATINGS, RATING_LABELS, apply_rating
+from .review import RATINGS, RATING_LABELS
 
 _STATIC_TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -106,6 +106,15 @@ def make_handler(repo: KnowledgeRepository):
                     point = sampler.draw_unlearned(repo.unlearned_points())
                     self._json({"point": repo.merged(point, None) if point else None,
                                 "remaining": len(repo.unlearned_points())})
+                elif path == "/api/export":
+                    payload = repo.export_all()
+                    payload["meta"] = {
+                        "app": config.APP_NAME,
+                        "app_version": config.APP_VERSION,
+                        "schema_version": migrations.current_version(repo.conn),
+                        "exported_at": datetime.now().isoformat(timespec="seconds"),
+                    }
+                    self._json(payload)
                 elif path == "/api/points":
                     self._json({"items": [repo.merged(p, repo.get_record(p.id))
                                           for p in repo.list_points()]})
@@ -146,11 +155,11 @@ def make_handler(repo: KnowledgeRepository):
                     if rating not in RATINGS:
                         self._error(400, f"rating 必须是 {'/'.join(RATINGS)}")
                         return
-                    record = repo.get_record(point_id)
-                    if record is None:
+                    if repo.get_record(point_id) is None:
                         self._error(404, "该知识点还没有学习记录")
                         return
-                    updated = repo.save_review(apply_rating(record, rating))
+                    # 读-改-写 + 追加日志在同一事务内完成（见 repository.apply_review）
+                    updated = repo.apply_review(point_id, rating)
                     self._json({"point": repo.merged(repo.get_point(point_id), updated)})
                     return
 

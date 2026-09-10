@@ -23,9 +23,10 @@ macOS 上的知识点随机抽取学习应用（Urania）：从内置 SQLite 中
 cd ~/Desktop/Gaia/Urania
 ./run.sh                                  # 启动（默认端口 8765，自动开窗口）
 python3 main.py --no-window               # 只起服务，不开窗口（CI/调试）
-python3 main.py --reset                   # 重置数据库重新播种
+python3 main.py --reset                   # 重置数据库重新播种（会先自动备份）
 python3 -m unittest discover -s tests -v  # 跑全部测试（改代码后必须全绿）
-./scripts/reset_db.sh                     # 重置数据库（脚本版）
+./scripts/reset_db.sh                     # 重置数据库（脚本版，同样先备份）
+./scripts/backup_db.sh                    # 手动备份数据库到 data/backups/
 ./scripts/make_app.sh                     # 生成 dist/Urania.app（双击可运行）
 ./scripts/make_dmg.sh                     # 生成 dist/Urania_<版本>.dmg 安装包
 ```
@@ -35,10 +36,24 @@ python3 -m unittest discover -s tests -v  # 跑全部测试（改代码后必须
 所以不能依赖「绑定失败」来发现占用。
 
 服务健康检查：`curl http://127.0.0.1:8765/api/health`。
+全量数据导出：`curl http://127.0.0.1:8765/api/export`。
+
+## 数据库与迁移（改 schema 前必读）
+
+- **版本管理**：`PRAGMA user_version` 是唯一事实来源；`schema_migrations` 表只作审计日志。
+  `urania/migrations.py` 的 `MIGRATIONS` 是有序列表，启动时自动补齐。
+- **迁移前自动备份**：`db.init()` 发现待应用迁移时先 `VACUUM INTO data/backups/`；新建库不备份。
+- **写迁移的三条纪律**：
+  1. 迁移函数只做 DDL/DML，用 `conn.execute()` 逐条执行——**不要用 `executescript()`**（它会隐式提交，破坏事务性）；
+  2. 追加到 `MIGRATIONS` 末尾，版本号连续递增，然后补测试到 `tests/test_migrations.py`；
+  3. 改完在真实库上验证：`python3 -c "from urania import config, db; db.init(config.DB_PATH).close()"`，确认数据量与备份文件。
+- **表的分工**：`learning_records` = 当前状态（可覆盖）；`review_logs` = 历史事件（只追加，
+  外键指向知识点，所以重置学习记录不会抹掉历史）。改调度/统计逻辑时不要绕过日志写入。
 
 ## 架构速记（详见 docs/ARCHITECTURE.md）
 
-- 分层：`api.py`（路由）→ `repository.py`（唯一写 SQL 处）→ `db/models`（SQLite）；核心算法在 `sampler.py`（随机抽取）与 `review.py`（自评→掌握度/间隔），二者是纯函数，随机源可注入。
+- 分层：`api.py`（路由）→ `repository.py`（唯一写 SQL 处）→ `db/migrations/models`（SQLite）；核心算法在 `sampler.py`（随机抽取）与 `review.py`（自评→掌握度/间隔），二者是纯函数，随机源可注入。
+- `repository.apply_review()` 在**同一事务**内完成「读 → 算（调 review.apply_rating）→ 写记录 + 写日志」，不要拆回去分步调用。
 - 「未标注」= `learning_records` 中无对应行；抽取不改变状态。
 - 状态机：unlearned → learning（标记，mastery 1~3）→ mastered（mastery ≥ 4）；删记录可回到 unlearned。
 - 自评：forgot(−1,1天) / fuzzy(不变) / solid(+1)，间隔表 {1:1, 2:2, 3:5, 4:8, 5:15} 天。
