@@ -12,14 +12,33 @@ class TestKnowledgePoints(RepoTestCase):
     def test_seed_inserted(self):
         self.assertEqual(len(self.repo.list_points()), 10)
 
-    def test_seed_idempotent(self):
+    def test_seed_skipped_when_db_not_empty(self):
+        """库非空时不补种：否则重命名/导入过的条目会被旧名字重新插回来。"""
         from urania import seed
-        again = seed.seed_if_needed(self.repo, [
-            {"name": "测试知识点1", "category": "x", "principle": "", "tags": []},
+        added = seed.seed_if_needed(self.repo, [
             {"name": "全新知识点", "category": "x", "principle": "", "tags": []},
         ])
-        self.assertEqual(again, 1)
-        self.assertEqual(len(self.repo.list_points()), 11)
+        self.assertEqual(added, 0, "库非空时不应补种")
+        self.assertEqual(len(self.repo.list_points()), 10, "条目数不应变化")
+
+    def test_seed_runs_on_empty_db(self):
+        import tempfile
+        from pathlib import Path as _Path
+
+        from urania import db, seed
+        from urania.repository import KnowledgeRepository
+
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = db.init(_Path(tmp) / "empty.db")
+            try:
+                fresh = KnowledgeRepository(conn)
+                added = seed.seed_if_needed(fresh, [
+                    {"name": "起步知识点", "category": "x", "principle": "", "tags": []},
+                ])
+                self.assertEqual(added, 1, "空库应导入种子")
+                self.assertEqual(len(fresh.list_points()), 1)
+            finally:
+                conn.close()
 
     def test_add_duplicate_raises(self):
         with self.assertRaises(RepositoryError):

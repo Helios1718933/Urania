@@ -7,6 +7,10 @@
 ## [Unreleased]
 
 ### Added
+- **Mnemosyne 知识库导入**：`scripts/import_mnemosyne.py` 把路线图知识库导入应用
+  （当前 369 条，覆盖阶段①②）。知识点升级为四段式结构
+  （定义 / 原理机制 / 面试要点 / 可拷贝代码）+ 难度、出处、自测关卡、模块、阶段；
+  已学习的条目按名称对齐后原地更新，**学习记录与复习日志零丢失**
 - **自包含安装包**：`./scripts/make_app.sh` 用 py2app 生成内嵌 Python 运行时的
   `dist/Urania.app`（55MB，通用二进制），目标 Mac 无需预装 Python；`make_dmg.sh`
   生成 29MB 的 DMG。含 ad-hoc 签名与图标（`scripts/make_icons.py` 纯标准库生成

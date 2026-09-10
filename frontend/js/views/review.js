@@ -4,7 +4,7 @@
 
 import { $main, api, esc, fmtDate, masteryLabel, refreshChip, toast } from "../core.js";
 import {
-  emptyBox, masteryDots, principleBlock, statusBadge, tagsBlock, vizBlock,
+  emptyBox, masteryDots, statusBadge, structuredBlock, tagsBlock, vizBlock,
 } from "../components.js";
 
 export async function renderReviewList() {
@@ -79,7 +79,7 @@ export async function renderReviewDetail(pointId) {
           · 已复习 ${point.review_count} 次 · 上次复习 ${fmtDate(point.last_reviewed_at)}
         </p>
         <div class="divider"></div>
-        ${principleBlock(point)}
+        ${structuredBlock(point)}
         ${vizBlock(point)}
         ${tagsBlock(point)}
         <div class="divider"></div>

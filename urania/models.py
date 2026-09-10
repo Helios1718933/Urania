@@ -14,9 +14,22 @@ def _today() -> str:
     return date.today().isoformat()
 
 
+def _opt(row: sqlite3.Row, key: str, default=""):
+    """读取可能不存在的列（老库升级过程中的兼容手段）。
+
+    注意：``sqlite3.Row`` 的 ``in`` 迭代的是**值**而不是列名，
+    所以必须写 ``in row.keys()``——ruff 的 SIM118 建议在这里是错的。
+    """
+    return row[key] if key in row.keys() else default  # noqa: SIM118
+
+
 @dataclass
 class KnowledgePoint:
-    """一个知识点：名称 + 原理讲解 + 可视化（链接或文字说明）。"""
+    """一个知识点。
+
+    ``principle`` 是「一整段原理讲解」的原始字段（手写条目用）；
+    下面的四段式字段来自 Mnemosyne 知识库，均为空时前端回退到 principle。
+    """
 
     id: int | None
     name: str
@@ -26,10 +39,21 @@ class KnowledgePoint:
     tags: list[str] = field(default_factory=list)
     created_at: str = field(default_factory=_now)
     updated_at: str = field(default_factory=_now)
+    # ---- 四段式结构 ----
+    definition: str = ""                # ① 一句话定义
+    mechanism: str = ""                 # ② 原理机制
+    key_point: str = ""                 # ③ 面试/实战要点
+    code_example: str = ""              # ④ 代码例子（markdown 围栏，可拷贝）
+    # ---- 学习元信息 ----
+    source: str = ""                    # 出处锚点（如 Python-100-Days Day17）
+    self_test: str = ""                 # 自测关卡
+    module: str = ""                    # 模块码（如 M04）
+    stage: int = 1                      # 阶段 1 / 2
+    difficulty: int = 0                 # 1~5；0 表示未标定
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> KnowledgePoint:
-        tags = (row["tags"] or "").split(",") if "tags" in row else []
+        tags = (row["tags"] or "").split(",") if "tags" in row.keys() else []  # noqa: SIM118
         return cls(
             id=row["id"],
             name=row["name"],
@@ -39,6 +63,15 @@ class KnowledgePoint:
             tags=[t.strip() for t in tags if t.strip()],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            definition=_opt(row, "definition"),
+            mechanism=_opt(row, "mechanism"),
+            key_point=_opt(row, "key_point"),
+            code_example=_opt(row, "code_example"),
+            source=_opt(row, "source"),
+            self_test=_opt(row, "self_test"),
+            module=_opt(row, "module"),
+            stage=_opt(row, "stage", 1) or 1,
+            difficulty=_opt(row, "difficulty", 0) or 0,
         )
 
     def to_dict(self) -> dict:
@@ -51,6 +84,15 @@ class KnowledgePoint:
             "tags": self.tags,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "definition": self.definition,
+            "mechanism": self.mechanism,
+            "key_point": self.key_point,
+            "code_example": self.code_example,
+            "source": self.source,
+            "self_test": self.self_test,
+            "module": self.module,
+            "stage": self.stage,
+            "difficulty": self.difficulty,
         }
 
 

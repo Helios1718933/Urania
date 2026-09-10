@@ -228,6 +228,14 @@ class TestAPI(RepoTestCase):
         self.assertNotIn("Traceback", payload["error"])
         self.assertIn("错误编号", payload["error"])
 
+    def test_point_exposes_structured_fields(self):
+        """四段式与元信息必须透过接口返回（前端据此渲染结构化正文）。"""
+        _, data = self.request("/api/draw")
+        point = data["point"]
+        for field in ("definition", "mechanism", "key_point", "code_example",
+                      "source", "self_test", "module", "stage", "difficulty"):
+            self.assertIn(field, point, f"接口应返回 {field}")
+
     def test_request_is_logged(self):
         with self.assertLogs("urania.api", level="INFO") as captured:
             self.request("/api/health")

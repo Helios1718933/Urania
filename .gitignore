@@ -15,6 +15,11 @@ data/*.lock
 data/.token
 data/backups/
 
+# 测试与覆盖率产物
+.coverage
+coverage.xml
+htmlcov/
+
 # 打包产物
 dist/
 build/

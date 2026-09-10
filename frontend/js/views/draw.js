@@ -5,7 +5,7 @@
 import {
   $main, RECALL_SECONDS, api, esc, fmtClock, masteryLabel, refreshChip, state, toast,
 } from "../core.js";
-import { emptyBox, principleBlock, tagsBlock, vizBlock } from "../components.js";
+import { emptyBox, structuredBlock, tagsBlock, vizBlock } from "../components.js";
 import { icons } from "../icons.js";
 
 let recallTimerId = null;
@@ -119,7 +119,7 @@ export async function renderDraw() {
         <h2 class="draw-name">${esc(p.name)}</h2>
         <div class="recall-wrap">
           <div class="recall-zone is-blurred" id="recall-zone">
-            ${principleBlock(p)}
+            ${structuredBlock(p)}
             ${vizBlock(p)}
             ${tagsBlock(p)}
           </div>

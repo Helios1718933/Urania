@@ -29,6 +29,8 @@ python3 -m unittest discover -s tests -v  # 跑全部测试（改代码后必须
 ./scripts/reset_db.sh                     # 重置数据库（脚本版，同样先备份）
 ./scripts/backup_db.sh                    # 手动备份数据库
 ./scripts/make_icons.py                   # 生成 PWA 图标与 .icns
+python3 scripts/import_mnemosyne.py --dry-run  # 预览知识库导入
+python3 scripts/import_mnemosyne.py            # 从 Mnemosyne 导入知识点（先自动备份）
 ./scripts/make_app.sh                     # 生成自包含 dist/Urania.app（内嵌 Python）
 ./scripts/make_dmg.sh                     # 生成 dist/Urania_<版本>.dmg 安装包
 ```
@@ -73,6 +75,8 @@ python3 -m unittest discover -s tests -v  # 跑全部测试（改代码后必须
 
 - Python：标准库优先；类型注解齐全；docstring 用中文；模块级常量大写。
 - 错误处理：业务错误抛 `RepositoryError`（api 层转 400/404），不裸 `except`。
+- 播种语义：`seed.seed_if_needed()` **只在知识库为空时**导入内置种子，不做「按名称补齐」——否则用户重命名或导入过的条目会在每次启动时被旧名字重新插回来（踩过一次）。
+- 知识点字段：`principle` 是「一整段讲解」的旧字段；`definition/mechanism/key_point/code_example` 是四段式结构。前端 `structuredBlock()` 在结构化字段为空时回退到 principle。改渲染时两条路径都要照顾。
 - 测试：unittest（不用 pytest）；`tests/common.py` 提供临时数据库夹具；API 测试用随机端口起真实服务。当前 114 个用例、覆盖率约 93%（门禁 85%）。
 - 工具链：`ruff check .`（配置见 `pyproject.toml`，中文标点相关的 RUF001/002/003 已关）与 `mypy` 必须全绿；CI 有独立的 lint 作业。
 - 时区：本项目刻意用本地时间（`date.today()` / `datetime.now()`），ruff 的 DTZ 规则已关闭，勿"修正"。

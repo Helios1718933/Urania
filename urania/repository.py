@@ -116,12 +116,126 @@ class KnowledgeRepository:
         self.conn.commit()
         return inserted
 
+    # --------------------------------------------------- 批量导入与改名 --
+    # 可导入/更新的知识点字段（顺序与 _normalize_point 的键一致）
+    POINT_FIELDS: tuple[str, ...] = (
+        "name", "category", "principle", "visualization", "tags",
+        "definition", "mechanism", "key_point", "code_example",
+        "source", "self_test", "module", "stage", "difficulty",
+    )
+
+    @staticmethod
+    def _normalize_point(raw: dict) -> dict:
+        """把外部数据（如 Mnemosyne 的条目）规整成入库用的字典。"""
+        def text(key: str) -> str:
+            return str(raw.get(key) or "").strip()
+
+        tags = raw.get("tags") or []
+        return {
+            "name": text("name"),
+            "category": text("category") or "未分类",
+            "principle": text("principle"),
+            "visualization": text("visualization"),
+            "tags": ",".join(str(t).strip() for t in tags if str(t).strip()),
+            "definition": text("definition"),
+            "mechanism": text("mechanism"),
+            "key_point": text("key_point"),
+            "code_example": text("code_example"),
+            "source": text("source"),
+            "self_test": text("self_test"),
+            "module": text("module"),
+            "stage": int(raw.get("stage") or 1),
+            "difficulty": int(raw.get("difficulty") or 0),
+        }
+
+    @staticmethod
+    def _point_unchanged(current: KnowledgePoint, data: dict) -> bool:
+        """内容是否与库中一致（用于统计「未变化」，避免无谓写库）。"""
+        for field in KnowledgeRepository.POINT_FIELDS:
+            wanted = data[field].split(",") if field == "tags" else data[field]
+            if getattr(current, field) != wanted:
+                return False
+        return True
+
+    def upsert_points(self, items: list[dict]) -> dict:
+        """按名称导入或更新知识点。
+
+        与 ``upsert_seed`` 的区别：**已存在的条目会被更新**为新内容。
+        学习记录与复习日志挂在 point_id 上，因此不受改名或内容更新影响。
+
+        Returns:
+            ``{"inserted": n, "updated": n, "unchanged": n}``
+        """
+        now = date.today().isoformat()
+        stats = {"inserted": 0, "updated": 0, "unchanged": 0}
+        columns = ", ".join(self.POINT_FIELDS)
+        placeholders = ", ".join("?" for _ in self.POINT_FIELDS)
+        assignments = ", ".join(f"{field} = ?" for field in self.POINT_FIELDS)
+
+        for raw in items:
+            data = self._normalize_point(raw)
+            if not data["name"]:
+                continue
+
+            row = self.conn.execute(
+                "SELECT * FROM knowledge_points WHERE name = ?", (data["name"],)
+            ).fetchone()
+
+            if row is None:
+                self.conn.execute(
+                    f"INSERT INTO knowledge_points ({columns}, created_at, updated_at)"
+                    f" VALUES ({placeholders}, ?, ?)",
+                    (*[data[f] for f in self.POINT_FIELDS], now, now),
+                )
+                stats["inserted"] += 1
+                continue
+
+            if self._point_unchanged(KnowledgePoint.from_row(row), data):
+                stats["unchanged"] += 1
+                continue
+
+            self.conn.execute(
+                f"UPDATE knowledge_points SET {assignments}, updated_at = ? WHERE id = ?",
+                (*[data[f] for f in self.POINT_FIELDS], now, row["id"]),
+            )
+            stats["updated"] += 1
+
+        self.conn.commit()
+        return stats
+
+    def rename_point(self, old_name: str, new_name: str) -> bool:
+        """按名称改知识点名（导入时对齐旧条目用）。
+
+        学习记录挂在 point_id 上，改名不会丢学习进度。
+        目标名已存在时不动（避免 UNIQUE 冲突）并返回 False。
+        """
+        row = self.conn.execute(
+            "SELECT id FROM knowledge_points WHERE name = ?", (old_name,)
+        ).fetchone()
+        if row is None:
+            return False
+        taken = self.conn.execute(
+            "SELECT 1 FROM knowledge_points WHERE name = ?", (new_name,)
+        ).fetchone()
+        if taken is not None:
+            return False
+        self.conn.execute(
+            "UPDATE knowledge_points SET name = ?, updated_at = ? WHERE id = ?",
+            (new_name, date.today().isoformat(), row["id"]),
+        )
+        self.conn.commit()
+        return True
+
     # ------------------------------------------------------------- 学习记录 --
     def get_record(self, point_id: int) -> LearningRecord | None:
         row = self.conn.execute(
             "SELECT * FROM learning_records WHERE point_id = ?", (point_id,)
         ).fetchone()
         return LearningRecord.from_row(row) if row else None
+
+    def point_count(self) -> int:
+        row = self.conn.execute("SELECT COUNT(*) AS n FROM knowledge_points").fetchone()
+        return int(row["n"])
 
     def unlearned_points(self) -> list[KnowledgePoint]:
         """所有「未标注」知识点：没有学习记录的那些。"""

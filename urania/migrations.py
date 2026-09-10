@@ -98,8 +98,34 @@ def _migration_001_review_logs(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_review_logs_time ON review_logs(reviewed_at)")
 
 
+# v2 新增的列：知识点从「一段原理」升级为四段式结构 + 学习元信息
+# （来自 Mnemosyne 知识库；老数据这些列保持默认空值，前端会回退到 principle）
+RICH_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("definition", "TEXT NOT NULL DEFAULT ''"),    # ① 一句话定义
+    ("mechanism", "TEXT NOT NULL DEFAULT ''"),     # ② 原理机制
+    ("key_point", "TEXT NOT NULL DEFAULT ''"),     # ③ 面试/实战要点
+    ("code_example", "TEXT NOT NULL DEFAULT ''"),  # ④ 代码例子（markdown 围栏）
+    ("source", "TEXT NOT NULL DEFAULT ''"),        # 出处锚点
+    ("self_test", "TEXT NOT NULL DEFAULT ''"),     # 自测关卡
+    ("module", "TEXT NOT NULL DEFAULT ''"),        # 模块码（如 M04）
+    ("stage", "INTEGER NOT NULL DEFAULT 1"),       # 阶段 1 / 2
+    ("difficulty", "INTEGER NOT NULL DEFAULT 0"),  # 1~5，0 表示未标定
+)
+
+
+def _migration_002_rich_fields(conn: sqlite3.Connection) -> None:
+    """v2：知识点支持四段式结构与学习元信息。"""
+    for name, declaration in RICH_COLUMNS:
+        conn.execute(f"ALTER TABLE knowledge_points ADD COLUMN {name} {declaration}")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_points_module ON knowledge_points(module)"
+    )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     (1, "add review_logs append-only table", _migration_001_review_logs),
+    (2, "add rich knowledge fields (structured four-part + study metadata)",
+     _migration_002_rich_fields),
 )
 
 LATEST_VERSION = MIGRATIONS[-1][0] if MIGRATIONS else 0
