@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 from urania import config
 from urania.models import LearningRecord

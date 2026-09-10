@@ -4,6 +4,7 @@ from __future__ import annotations
 import unittest
 
 from common import RepoTestCase
+
 from urania.repository import RepositoryError
 
 

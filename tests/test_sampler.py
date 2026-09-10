@@ -6,6 +6,7 @@ import unittest
 from collections import Counter
 
 from common import RepoTestCase
+
 from urania.models import KnowledgePoint
 from urania.sampler import draw_unlearned
 

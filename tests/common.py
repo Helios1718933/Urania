@@ -10,8 +10,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from urania import db, seed  # noqa: E402
-from urania.repository import KnowledgeRepository  # noqa: E402
+from urania import db, seed
+from urania.repository import KnowledgeRepository
 
 TEST_ITEMS = [
     {"name": f"测试知识点{i}", "category": "Python 基础",

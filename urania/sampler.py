@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import random
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from .models import KnowledgePoint
 
@@ -14,7 +14,7 @@ from .models import KnowledgePoint
 def draw_unlearned(
     candidates: Sequence[KnowledgePoint],
     rng: random.Random | None = None,
-) -> Optional[KnowledgePoint]:
+) -> KnowledgePoint | None:
     """从候选（未学习）知识点中等概率随机抽取一个。
 
     Args:
@@ -26,5 +26,5 @@ def draw_unlearned(
     """
     if not candidates:
         return None
-    rng = rng or random
-    return rng.choice(list(candidates))
+    source = rng or random
+    return source.choice(list(candidates))

@@ -71,7 +71,7 @@ def probe_running_instance(port: int) -> bool:
         with opener.open(url, timeout=1.5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             return data.get("app") == config.APP_NAME
-    except Exception:  # noqa: BLE001 任何网络异常都视为「不是本应用」
+    except Exception:
         return False
 
 
@@ -84,7 +84,8 @@ def acquire_instance_lock():
         拿不到锁 → (None, 运行中实例写入的端口或 None)，本进程只打开界面。
     """
     LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
-    fh = open(LOCK_PATH, "a+")
+    # 有意不用 with：锁句柄必须活到进程退出，提前关闭会释放 flock
+    fh = open(LOCK_PATH, "a+")  # noqa: SIM115
     try:
         fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
@@ -128,7 +129,7 @@ def pick_free_port(preferred: int, host: str = config.DEFAULT_HOST) -> int:
 def open_native_window(url: str) -> bool:
     """尝试用 pywebview 打开原生窗口；未安装则返回 False。"""
     try:
-        import webview  # noqa: PLC0415
+        import webview
     except ImportError:
         return False
     webview.create_window(
@@ -158,9 +159,9 @@ def main() -> int:
             raise SystemExit("已有 Urania 实例在运行，但未能定位其端口；请稍后重试。")
         logger.info("检测到 Urania 已在运行: http://%s:%d —— 直接打开界面",
                     config.DEFAULT_HOST, port)
-        if not args.no_window:
-            if args.browser or not open_native_window(f"http://{config.DEFAULT_HOST}:{port}"):
-                webbrowser.open(f"http://{config.DEFAULT_HOST}:{port}")
+        url = f"http://{config.DEFAULT_HOST}:{port}"
+        if not args.no_window and (args.browser or not open_native_window(url)):
+            webbrowser.open(url)
         return 0
 
     # ---- 本进程作为服务端 ----

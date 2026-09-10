@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import date, datetime
-from typing import Optional
 
 from . import config
 from .models import (
@@ -56,7 +55,7 @@ class KnowledgeRepository:
         self.conn = conn
 
     # ------------------------------------------------------------- 知识点 --
-    def list_points(self, category: Optional[str] = None) -> list[KnowledgePoint]:
+    def list_points(self, category: str | None = None) -> list[KnowledgePoint]:
         sql = "SELECT * FROM knowledge_points"
         params: tuple = ()
         if category:
@@ -79,7 +78,7 @@ class KnowledgeRepository:
         category: str,
         principle: str = "",
         visualization: str = "",
-        tags: Optional[list[str]] = None,
+        tags: list[str] | None = None,
     ) -> KnowledgePoint:
         """新增知识点。重名会抛 RepositoryError。"""
         if not name.strip():
@@ -93,8 +92,10 @@ class KnowledgeRepository:
                  ",".join(t.strip() for t in (tags or []) if t.strip()), now, now),
             )
         except sqlite3.IntegrityError:
-            raise ConflictError(f"知识点已存在: {name.strip()}")
+            raise ConflictError(f"知识点已存在: {name.strip()}") from None
         self.conn.commit()
+        if cur.lastrowid is None:  # 刚插入，理论上不可达
+            raise RepositoryError("新增知识点后未取得主键")
         return self.get_point(cur.lastrowid)
 
     def upsert_seed(self, items: list[dict]) -> int:
@@ -116,7 +117,7 @@ class KnowledgeRepository:
         return inserted
 
     # ------------------------------------------------------------- 学习记录 --
-    def get_record(self, point_id: int) -> Optional[LearningRecord]:
+    def get_record(self, point_id: int) -> LearningRecord | None:
         row = self.conn.execute(
             "SELECT * FROM learning_records WHERE point_id = ?", (point_id,)
         ).fetchone()
@@ -132,12 +133,34 @@ class KnowledgeRepository:
         return [KnowledgePoint.from_row(r) for r in rows]
 
     def learned_with_records(self) -> list[tuple[KnowledgePoint, LearningRecord]]:
+        """已学习知识点及其当前记录。
+
+        单次 JOIN 取回两表（原实现每条再单独查一次记录，即 N+1）；
+        r 的列全部起别名，避免与 ``p.*`` 的 id/created_at 等重名。
+        """
         rows = self.conn.execute(
-            "SELECT p.* FROM knowledge_points p"
-            " JOIN learning_records r ON r.point_id = p.id"
+            "SELECT p.*,"
+            " r.id AS r_id, r.status, r.mastery, r.review_count, r.last_reviewed_at,"
+            " r.next_review_at, r.created_at AS r_created_at, r.updated_at AS r_updated_at"
+            " FROM knowledge_points p JOIN learning_records r ON r.point_id = p.id"
             " ORDER BY r.next_review_at, r.mastery, r.last_reviewed_at"
         ).fetchall()
-        return [(KnowledgePoint.from_row(r), self.get_record(r["id"])) for r in rows]
+        return [(KnowledgePoint.from_row(r), self._record_from_join(r)) for r in rows]
+
+    @staticmethod
+    def _record_from_join(row: sqlite3.Row) -> LearningRecord:
+        """从 JOIN 结果行还原学习记录（列名带 r_ 前缀）。"""
+        return LearningRecord(
+            id=row["r_id"],
+            point_id=row["id"],
+            status=row["status"],
+            mastery=row["mastery"],
+            review_count=row["review_count"],
+            last_reviewed_at=row["last_reviewed_at"],
+            next_review_at=row["next_review_at"],
+            created_at=row["r_created_at"],
+            updated_at=row["r_updated_at"],
+        )
 
     def mark_learned(self, point_id: int, initial_mastery: int) -> LearningRecord:
         """把知识点标记为已学习：同一事务写入学习记录 + 追加首条日志。
@@ -237,11 +260,11 @@ class KnowledgeRepository:
         self,
         point_id: int,
         source: str,
-        rating: Optional[str],
+        rating: str | None,
         reviewed_at: str,
-        elapsed_days: Optional[int],
-        scheduled_days: Optional[int],
-        prev_mastery: Optional[int],
+        elapsed_days: int | None,
+        scheduled_days: int | None,
+        prev_mastery: int | None,
         new_mastery: int,
     ) -> None:
         """追加一条复习日志（不提交；事务由调用方控制）。"""
@@ -256,8 +279,8 @@ class KnowledgeRepository:
     # ------------------------------------------------------------- 复习日志 --
     def list_review_logs(
         self,
-        point_id: Optional[int] = None,
-        limit: Optional[int] = None,
+        point_id: int | None = None,
+        limit: int | None = None,
     ) -> list[ReviewLog]:
         """按时间倒序取复习日志（可按知识点过滤）。"""
         sql = "SELECT * FROM review_logs"
@@ -297,7 +320,7 @@ class KnowledgeRepository:
         total = self.conn.execute("SELECT COUNT(*) AS n FROM knowledge_points").fetchone()["n"]
         unlearned = len(self.unlearned_points())
         learning = mastered = total_reviews = 0
-        distribution = {m: 0 for m in range(1, config.MASTERY_MAX + 1)}
+        distribution = dict.fromkeys(range(1, config.MASTERY_MAX + 1), 0)
         for r in rows:
             total_reviews += r["reviews"]
             if r["status"] == config.STATUS_MASTERED:
@@ -322,7 +345,7 @@ class KnowledgeRepository:
         }
 
     # ------------------------------------------------------------- 组装 --
-    def merged(self, point: KnowledgePoint, record: Optional[LearningRecord]) -> dict:
+    def merged(self, point: KnowledgePoint, record: LearningRecord | None) -> dict:
         """知识点 + 学习记录 → 前端使用的合并视图。"""
         data = point.to_dict()
         if record is None:

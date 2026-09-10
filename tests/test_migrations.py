@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from common import PROJECT_ROOT  # noqa: F401  确保包可导入
+
 from urania import db, migrations
 
 

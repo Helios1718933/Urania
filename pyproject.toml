@@ -1,0 +1,50 @@
+# 工具配置（lint / 类型检查 / 覆盖率）
+# 说明：本项目运行时零第三方依赖，这里只配置开发期工具，不代表可安装包。
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = [".venv", "dist", "data", "build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+    # 单人本地应用刻意使用本地时间：到期判断按自然日，无需时区
+    "DTZ",
+    # 行宽交给 formatter 与编辑器，避免为了 79 列硬拆可读表达式
+    "E501",
+    # 中文代码库：全角标点（，。：（）、）与 ASCII 混排是规范写法，不是「歧义字符」
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 测试里允许更宽松的写法（断言、辅助函数命名等）
+"tests/*" = ["B", "SIM", "E402"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["urania", "main.py"]
+ignore_missing_imports = true
+warn_unused_configs = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+# pywebview 为可选依赖，未安装时不应报错
+module = ["webview"]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["urania"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise SystemExit",
+]

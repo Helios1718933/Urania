@@ -14,6 +14,15 @@ cd Urania
 python3 -m unittest discover -s tests -v  # 测试
 ```
 
+提交前请把这三条跑绿（CI 会强制检查）：
+
+```bash
+pip install "ruff==0.16.6" mypy coverage
+ruff check .                              # 风格与静态检查
+mypy                                      # 类型检查（配置在 pyproject.toml）
+coverage run -m unittest discover -s tests && coverage report --fail-under=85
+```
+
 ## 提交规范
 
 - 分支命名：`feat/xxx`、`fix/xxx`、`docs/xxx`

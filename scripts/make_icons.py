@@ -48,7 +48,7 @@ def _in_u(x: float, y: float) -> bool:
 
 
 def _blend(base: tuple, overlay: tuple, alpha: float) -> tuple:
-    return tuple(int(round(b * (1 - alpha) + o * alpha)) for b, o in zip(base, overlay))
+    return tuple(round(b * (1 - alpha) + o * alpha) for b, o in zip(base, overlay, strict=True))
 
 
 def _pixel(x: float, y: float, pixel: float) -> tuple[int, int, int, int]:
@@ -81,11 +81,11 @@ def _pixel(x: float, y: float, pixel: float) -> tuple[int, int, int, int]:
         return (0, 0, 0, 0)
 
     # 渐变底色
-    color = tuple(int(round(a + (b - a) * y)) for a, b in zip(BG_TOP, BG_BOTTOM))
+    color = tuple(round(a + (b - a) * y) for a, b in zip(BG_TOP, BG_BOTTOM, strict=True))
     color = _blend(color, GLOW, min(0.35, cov_glow * 0.35))
     color = _blend(color, (255, 255, 255), cov_u)
 
-    alpha = int(round(255 * cov_bg))
+    alpha = round(255 * cov_bg)
     return (color[0], color[1], color[2], alpha)
 
 

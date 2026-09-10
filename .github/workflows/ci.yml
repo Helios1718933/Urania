@@ -7,6 +7,24 @@ on:
     branches: [main]
 
 jobs:
+  # 代码风格与类型：跑一次即可，不必进测试矩阵
+  lint:
+    name: Lint & types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install tools
+        # ruff 的默认规则集会随小版本变化，这里固定版本避免无关改动导致 CI 抖红
+        run: pip install "ruff==0.16.6" mypy
+      - name: Ruff
+        run: ruff check .
+      - name: Mypy
+        run: mypy
+
   test:
     name: Python ${{ matrix.python }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -22,6 +40,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+          cache: pip
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install coverage
+      - run: coverage run -m unittest discover -s tests
+      - name: Report (低于 85% 失败)
+        run: coverage report --fail-under=85

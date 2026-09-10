@@ -34,7 +34,7 @@ from urllib.parse import urlparse
 from . import auth, config, migrations, sampler
 from .logging_setup import request_event
 from .repository import KnowledgeRepository, RepositoryError, ValidationError
-from .review import RATINGS, RATING_LABELS
+from .review import RATING_LABELS, RATINGS
 
 logger = logging.getLogger("urania.api")
 
@@ -63,13 +63,13 @@ def make_handler(repo: KnowledgeRepository, auth_token: str | None = None):
         protocol_version = "HTTP/1.1"
 
         # ------------------------------------------------------------ 日志 --
-        def log_message(self, fmt, *args) -> None:  # noqa: N802 (基类命名)
+        def log_message(self, fmt, *args) -> None:
             """屏蔽基类往 stderr 裸打的日志——请求日志改由 _send 统一输出。"""
 
-        def log_error(self, fmt, *args) -> None:  # noqa: N802
+        def log_error(self, fmt, *args) -> None:
             logger.warning("HTTP 协议层错误: %s", fmt % args)
 
-        def handle_one_request(self) -> None:  # noqa: N802
+        def handle_one_request(self) -> None:
             self._started_at = time.perf_counter()
             super().handle_one_request()
 
@@ -197,16 +197,14 @@ def make_handler(repo: KnowledgeRepository, auth_token: str | None = None):
             self._send(target.read_bytes(), _STATIC_TYPES[target.suffix])
 
         # ------------------------------------------------------------ 路由 --
-        def do_GET(self):  # noqa: N802
+        def do_GET(self):
             if not self._check_auth():
                 return
             path = urlparse(self.path).path
             try:
                 if path in ("/", "/index.html"):
                     self._static("index.html")
-                elif path in ("/manifest.webmanifest", "/favicon.ico"):
-                    self._static(path.lstrip("/"))
-                elif path.startswith(("/css/", "/js/", "/assets/")):
+                elif path in ("/manifest.webmanifest", "/favicon.ico") or path.startswith(("/css/", "/js/", "/assets/")):
                     self._static(path.lstrip("/"))
                 elif path == "/api/health":
                     self._json({"status": "ok", "app": config.APP_NAME,
@@ -254,10 +252,10 @@ def make_handler(repo: KnowledgeRepository, auth_token: str | None = None):
                         self._error(404, "接口不存在")
             except RepositoryError as e:
                 self._repo_error(e)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 self._internal_error(e)
 
-        def do_POST(self):  # noqa: N802
+        def do_POST(self):
             if not self._check_auth():
                 return
             path = urlparse(self.path).path
@@ -301,10 +299,10 @@ def make_handler(repo: KnowledgeRepository, auth_token: str | None = None):
                 self._error(404, "接口不存在")
             except RepositoryError as e:
                 self._repo_error(e)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 self._internal_error(e)
 
-        def do_DELETE(self):  # noqa: N802
+        def do_DELETE(self):
             if not self._check_auth():
                 return
             path = urlparse(self.path).path
@@ -317,7 +315,7 @@ def make_handler(repo: KnowledgeRepository, auth_token: str | None = None):
                 self._error(404, "接口不存在")
             except RepositoryError as e:
                 self._repo_error(e)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 self._internal_error(e)
 
         # ------------------------------------------------------------ 辅助 --

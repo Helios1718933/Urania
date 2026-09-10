@@ -15,6 +15,7 @@
 """
 from __future__ import annotations
 
+import contextlib
 import hmac
 import secrets
 import time
@@ -43,10 +44,8 @@ def load_or_create_token(path: Path) -> str:
     token = generate_token()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(token + "\n", encoding="utf-8")
-    try:
+    with contextlib.suppress(OSError):  # 某些文件系统不支持 chmod
         path.chmod(0o600)
-    except OSError:  # 某些文件系统不支持 chmod，忽略
-        pass
     return token
 
 
@@ -73,7 +72,7 @@ def token_from_cookie(cookie_header: str | None) -> str | None:
     try:
         jar = SimpleCookie()
         jar.load(cookie_header)
-    except Exception:  # noqa: BLE001 畸形的 Cookie 头不应导致 500
+    except Exception:
         return None
     morsel = jar.get(COOKIE_NAME)
     return morsel.value if morsel else None

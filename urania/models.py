@@ -3,8 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime, date
-from typing import Optional
+from datetime import date, datetime
 
 
 def _now() -> str:
@@ -19,7 +18,7 @@ def _today() -> str:
 class KnowledgePoint:
     """一个知识点：名称 + 原理讲解 + 可视化（链接或文字说明）。"""
 
-    id: Optional[int]
+    id: int | None
     name: str
     category: str
     principle: str                      # 原理讲解（纯文本，空行分段）
@@ -29,8 +28,8 @@ class KnowledgePoint:
     updated_at: str = field(default_factory=_now)
 
     @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "KnowledgePoint":
-        tags = (row["tags"] or "").split(",") if "tags" in row.keys() else []
+    def from_row(cls, row: sqlite3.Row) -> KnowledgePoint:
+        tags = (row["tags"] or "").split(",") if "tags" in row else []
         return cls(
             id=row["id"],
             name=row["name"],
@@ -62,7 +61,7 @@ class LearningRecord:
     「未标注」= 没有对应记录行；一旦标记学习即产生本记录。
     """
 
-    id: Optional[int]
+    id: int | None
     point_id: int
     status: str = "learning"            # learning | mastered
     mastery: int = 1                    # 1~5
@@ -73,7 +72,7 @@ class LearningRecord:
     updated_at: str = field(default_factory=_now)
 
     @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "LearningRecord":
+    def from_row(cls, row: sqlite3.Row) -> LearningRecord:
         return cls(
             id=row["id"],
             point_id=row["point_id"],
@@ -113,19 +112,19 @@ class ReviewLog:
     真实保留率，并为将来的调度算法调优保留原始数据。
     """
 
-    id: Optional[int]
+    id: int | None
     point_id: int
     source: str                        # learn | review
-    rating: Optional[str]              # forgot | fuzzy | solid；标记学习时为 None
+    rating: str | None              # forgot | fuzzy | solid；标记学习时为 None
     reviewed_at: str
-    elapsed_days: Optional[int]        # 距上次复习的天数；首次为 None
-    scheduled_days: Optional[int]      # 本次安排的下次间隔天数
-    prev_mastery: Optional[int]        # 变更前掌握度；首次为 None
+    elapsed_days: int | None        # 距上次复习的天数；首次为 None
+    scheduled_days: int | None      # 本次安排的下次间隔天数
+    prev_mastery: int | None        # 变更前掌握度；首次为 None
     new_mastery: int
     created_at: str = field(default_factory=_now)
 
     @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "ReviewLog":
+    def from_row(cls, row: sqlite3.Row) -> ReviewLog:
         return cls(
             id=row["id"],
             point_id=row["point_id"],

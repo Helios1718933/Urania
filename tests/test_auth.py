@@ -10,8 +10,8 @@ import urllib.request
 from pathlib import Path
 
 from common import RepoTestCase
-from urania import auth, db, seed
-from urania.repository import KnowledgeRepository
+
+from urania import auth
 from urania.server import create_server
 
 TOKEN = "testtokn"

@@ -63,7 +63,9 @@ python3 -m unittest discover -s tests -v  # 跑全部测试（改代码后必须
 
 - Python：标准库优先；类型注解齐全；docstring 用中文；模块级常量大写。
 - 错误处理：业务错误抛 `RepositoryError`（api 层转 400/404），不裸 `except`。
-- 测试：unittest（不用 pytest）；`tests/common.py` 提供临时数据库夹具；API 测试用随机端口起真实服务。
+- 测试：unittest（不用 pytest）；`tests/common.py` 提供临时数据库夹具；API 测试用随机端口起真实服务。当前 114 个用例、覆盖率约 93%（门禁 85%）。
+- 工具链：`ruff check .`（配置见 `pyproject.toml`，中文标点相关的 RUF001/002/003 已关）与 `mypy` 必须全绿；CI 有独立的 lint 作业。
+- 时区：本项目刻意用本地时间（`date.today()` / `datetime.now()`），ruff 的 DTZ 规则已关闭，勿"修正"。
 - 文案/UI：中文界面、macOS 系统色板与控件尺寸；颜色一律走 CSS 设计令牌（`--blue` 等），深浅色自动适配必须保持。
 
 ## 改动后的验收清单
